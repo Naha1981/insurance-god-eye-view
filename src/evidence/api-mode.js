@@ -1,6 +1,7 @@
 import {
   clearStoredToken,
   createCase,
+  downloadReport,
   getCase,
   getMe,
   getStoredToken,
@@ -25,6 +26,7 @@ style.textContent = `
   .api-auth-error { margin-top: 10px; color: #ff927e; font-size: 12px; }
   .api-live-chip { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; color: #8ff0b4; }
   .api-live-chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #5be58f; box-shadow: 0 0 8px #5be58f; }
+  .api-report-btn { border-color: rgba(74,180,255,.35); color: #d7ecff; }
 `;
 document.head.appendChild(style);
 
@@ -163,6 +165,36 @@ const installApiIntake = (caseId) => {
   });
 };
 
+const installReportAction = (caseId) => {
+  const actions = document.querySelector('.top-actions');
+  if (!actions || document.querySelector('#downloadReport')) return;
+  const button = document.createElement('button');
+  button.id = 'downloadReport';
+  button.className = 'ghost-btn api-report-btn';
+  button.textContent = 'EXPORT REPORT';
+  button.title = 'Download the investigator evidence report';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'BUILDING REPORT…';
+    try {
+      const { blob, filename } = await downloadReport(caseId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      const status = document.querySelector('#intakeStatus');
+      if (status) status.textContent = `REPORT FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'EXPORT REPORT';
+    }
+  });
+  actions.appendChild(button);
+};
+
 const enableApiMode = async () => {
   if (!isApiConfigured()) return;
   await waitForWorkspace();
@@ -206,6 +238,7 @@ const enableApiMode = async () => {
   if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion.';
 
   installApiIntake(caseRecord.id);
+  installReportAction(caseRecord.id);
   renderApiEvidence(await listEvidence(caseRecord.id));
 };
 
