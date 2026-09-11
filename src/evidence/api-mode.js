@@ -191,7 +191,7 @@ const installApiIntake = (caseId) => {
       <option>OTHER</option>
     </select>
     <button id="apiAddEvidence" class="intake-btn">UPLOAD TO CASE</button>
-    <input id="apiEvidenceFile" type="file" hidden />
+    <input id="apiEvidenceFile" type="file" hidden accept="video/*,image/*,application/pdf,.pdf" />
   `);
 
   const button = document.querySelector('#apiAddEvidence');
@@ -205,9 +205,12 @@ const installApiIntake = (caseId) => {
     button.disabled = true;
     status.textContent = `UPLOADING ${file.name}…`;
     try {
-      const record = await uploadEvidence(caseId, { file, type: type.value, capturedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null });
+      const record = await uploadEvidence(caseId, { file, type: type.value });
       renderApiEvidence(await listEvidence(caseId));
-      status.textContent = `REGISTERED ${record.id} · SERVER SHA-256 ${record.sha256.slice(0, 16)}…`;
+      const captureNote = type.value === 'DASHCAM' || type.value === 'CCTV'
+        ? ' · capture time not asserted from filesystem metadata'
+        : '';
+      status.textContent = `REGISTERED ${record.id} · SERVER SHA-256 ${record.sha256.slice(0, 16)}…${captureNote}`;
       input.value = '';
     } catch (error) {
       if (error?.status === 401) clearStoredToken();
@@ -350,7 +353,7 @@ const enableApiMode = async () => {
     const footerBadge = document.querySelector('.footer-badge');
     if (footerBadge) footerBadge.textContent = 'API PILOT';
     const registerNote = document.querySelector('#evidenceRegister')?.parentElement?.querySelector('.small-note');
-    if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion.';
+    if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion. Capture time is only asserted when supplied by source metadata or investigator input.';
     installApiIntake(selectedCase.id);
     installReportAction(selectedCase.id);
     renderApiEvidence(await listEvidence(selectedCase.id));
