@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildCaseAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
+import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
 
 const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
 const prd = await readFile(new URL('../PRD.md', import.meta.url), 'utf8');
@@ -43,4 +44,30 @@ assert.equal(assessment.claims[0].result.status, 'CONFLICTING');
 assert.deepEqual(findMissingEvidence(['GPS', 'DASHCAM'], assessment.evidence), ['DASHCAM']);
 assert.ok(assessment.overallConfidence > 0);
 
-console.log('PASS: ClaimTrace static + evidence engine checks');
+const helloHash = await hashBytes(new TextEncoder().encode('hello'));
+assert.equal(helloHash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+
+const record = createEvidenceRecord({
+  caseId: 'CLM-DEMO-0001',
+  type: 'DASHCAM',
+  source: 'insured upload',
+  sourceRef: 'dashcam-front.mp4',
+  sha256: helloHash,
+  capturedAt: '2026-08-18T12:31:40Z',
+  ingestedAt: '2026-08-18T12:32:00Z',
+  mediaType: 'video/mp4',
+  sizeBytes: 123,
+});
+assert.equal(validateEvidenceRecord(record).valid, true);
+assert.equal(record.chainOfCustody.length, 1);
+const reviewed = appendCustodyEvent(record, {
+  action: 'REVIEWED',
+  timestamp: '2026-08-18T12:35:00Z',
+  actor: 'INVESTIGATOR-01',
+  note: 'Original upload inspected without modification.',
+});
+assert.equal(reviewed.chainOfCustody.length, 2);
+assert.notEqual(reviewed.id, undefined);
+assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
+
+console.log('PASS: ClaimTrace static + evidence engine + intake checks');
