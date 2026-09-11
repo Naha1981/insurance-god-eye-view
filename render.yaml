@@ -30,7 +30,7 @@ services:
       - key: CLAIMTRACE_SESSION_HOURS
         value: "12"
       - key: CLAIMTRACE_CORS_ORIGINS
-        value: "*"
+        value: "https://claimtrace-web.onrender.com"
       - key: CLAIMTRACE_MAX_UPLOAD_BYTES
         value: "26214400"
       - key: CLAIMTRACE_BOOTSTRAP_EMAIL
