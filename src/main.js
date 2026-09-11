@@ -12,11 +12,11 @@ const INCIDENT = {
 };
 
 const EVIDENCE = [
-  { time: '14:31:42', type: 'GPS', title: 'Vehicle A entered scene', detail: 'Estimated 62 km/h · source: synthetic telematics', confidence: 'HIGH' },
-  { time: '14:31:46', type: 'GPS', title: 'Vehicle B approaches intersection', detail: 'Estimated 21 km/h · source: synthetic telematics', confidence: 'HIGH' },
-  { time: '14:31:48', type: 'BRAKE', title: 'Vehicle A braking event', detail: 'Deceleration threshold exceeded', confidence: 'MEDIUM' },
-  { time: '14:31:50', type: 'IMPACT', title: 'Estimated collision point', detail: 'Trajectory intersection + impact timestamp', confidence: 'HIGH' },
-  { time: '14:31:52', type: 'GPS', title: 'Vehicles stationary', detail: 'Both trajectories converge at scene', confidence: 'HIGH' },
+  { id: 'E-0001', time: '14:31:42', type: 'GPS', source: 'TELEMATICS', title: 'Vehicle A entered scene', detail: 'Estimated 62 km/h · synthetic telematics', confidence: 'HIGH', provenance: 'SOURCE-LINKED' },
+  { id: 'E-0002', time: '14:31:46', type: 'GPS', source: 'TELEMATICS', title: 'Vehicle B approaches intersection', detail: 'Estimated 21 km/h · synthetic telematics', confidence: 'HIGH', provenance: 'SOURCE-LINKED' },
+  { id: 'E-0003', time: '14:31:48', type: 'BRAKE', source: 'EDR', title: 'Vehicle A braking event', detail: 'Deceleration threshold exceeded', confidence: 'MEDIUM', provenance: 'SOURCE-LINKED' },
+  { id: 'E-0004', time: '14:31:50', type: 'IMPACT', source: 'INFERENCE', title: 'Estimated collision point', detail: 'Trajectory intersection + impact timestamp', confidence: 'HIGH', provenance: 'DERIVED' },
+  { id: 'E-0005', time: '14:31:52', type: 'GPS', source: 'TELEMATICS', title: 'Vehicles stationary', detail: 'Both trajectories converge at scene', confidence: 'HIGH', provenance: 'SOURCE-LINKED' },
 ];
 
 const CLAIMS = [
@@ -83,6 +83,12 @@ app.innerHTML = `
           <div class="section-kicker">CLAIM VERSION TEST</div>
           <div id="claims" class="claims"></div>
         </div>
+
+        <div class="panel-block">
+          <div class="section-head"><div><div class="section-kicker">EVIDENCE REGISTER</div><h2>Provenance chain</h2></div><span class="mini-chip">${EVIDENCE.length} ITEMS</span></div>
+          <div id="evidenceRegister" class="evidence-register"></div>
+          <div class="small-note">Production intake will preserve original bytes, hashes, source references and custody events.</div>
+        </div>
       </aside>
     </section>
 
@@ -105,6 +111,14 @@ timelineEl.innerHTML = EVIDENCE.map((event, index) => `
 const claimsEl = document.querySelector('#claims');
 claimsEl.innerHTML = CLAIMS.map(([claim, result]) => `
   <div class="claim-row"><div class="claim-text">${claim}</div><span class="claim-result ${result.toLowerCase().replaceAll(' ', '-')}">${result}</span></div>
+`).join('');
+
+const evidenceRegisterEl = document.querySelector('#evidenceRegister');
+evidenceRegisterEl.innerHTML = EVIDENCE.map((event) => `
+  <div class="evidence-row">
+    <div class="evidence-main"><span class="evidence-id">${event.id}</span><strong>${event.type}</strong><span class="evidence-title">${event.title}</span></div>
+    <div class="evidence-meta"><span>${event.source}</span><span>${event.confidence}</span><span class="provenance ${event.provenance.toLowerCase().replaceAll('-', '')}">${event.provenance}</span></div>
+  </div>
 `).join('');
 
 document.querySelectorAll('.timeline-event').forEach((el) => {
