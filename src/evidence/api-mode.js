@@ -1,6 +1,7 @@
 import {
   clearStoredToken,
   createCase,
+  getCase,
   getMe,
   getStoredToken,
   isApiConfigured,
@@ -8,6 +9,8 @@ import {
   login,
   uploadEvidence,
 } from './api.js';
+
+const CASE_KEY = 'claimtrace_case_id';
 
 const style = document.createElement('style');
 style.textContent = `
@@ -49,9 +52,9 @@ const showAuth = () => new Promise((resolve) => {
       <h2>ClaimTrace Investigator Access</h2>
       <p>This deployment is connected to the ClaimTrace API. Sign in to work inside a tenant-isolated investigation workspace.</p>
       <label for="claimtraceEmail">Email</label>
-      <input id="claimtraceEmail" type="email" autocomplete="username" required />
+      <input id="claimtraceEmail" name="claimtraceEmail" type="email" autocomplete="username" required />
       <label for="claimtracePassword">Password</label>
-      <input id="claimtracePassword" type="password" autocomplete="current-password" required />
+      <input id="claimtracePassword" name="claimtracePassword" type="password" autocomplete="current-password" required />
       <button type="submit">SIGN IN</button>
       <div id="claimtraceLoginError" class="api-auth-error" aria-live="polite"></div>
     </form>
@@ -169,15 +172,29 @@ const enableApiMode = async () => {
       user = await getMe();
     } catch {
       clearStoredToken();
+      sessionStorage.removeItem(CASE_KEY);
     }
   }
   if (!user) user = await showAuth();
 
-  const caseRecord = await createCase({
-    title: 'ClaimTrace investigation — Johannesburg motor collision',
-    incident_at: new Date('2026-08-18T12:31:50Z').toISOString(),
-    location: { lat: -26.2466, lon: 28.0205 },
-  });
+  let caseRecord = null;
+  const savedCaseId = sessionStorage.getItem(CASE_KEY);
+  if (savedCaseId) {
+    try {
+      caseRecord = await getCase(savedCaseId);
+    } catch {
+      sessionStorage.removeItem(CASE_KEY);
+    }
+  }
+  if (!caseRecord) {
+    caseRecord = await createCase({
+      title: 'ClaimTrace investigation — Johannesburg motor collision',
+      incident_at: new Date('2026-08-18T12:31:50Z').toISOString(),
+      location: { lat: -26.2466, lon: 28.0205 },
+    });
+    sessionStorage.setItem(CASE_KEY, caseRecord.id);
+  }
+
   setBanner(`${user.email} · ${user.tenant_id} · ${caseRecord.id}`);
   const casePill = document.querySelector('.case-pill');
   if (casePill) casePill.textContent = caseRecord.id;
