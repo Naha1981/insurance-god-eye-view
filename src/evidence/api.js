@@ -65,12 +65,13 @@ const readBrowserVideoMetadata = (file) => new Promise((resolve) => {
   video.src = objectUrl;
 });
 
-export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 'USER_UPLOAD', claimedSha256 = null }) => {
+export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 'USER_UPLOAD', claimedSha256 = null, videoCaptureStartAt = null }) => {
   const form = new FormData(); form.set('type', type); form.set('source', source); if (capturedAt) form.set('captured_at', capturedAt); if (claimedSha256) form.set('claimed_sha256', claimedSha256); form.set('file', file, file.name);
   const record = await request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/upload`, { method: 'POST', body: form });
   if ((type === 'DASHCAM' || type === 'CCTV') && file?.type?.startsWith('video/')) {
     const metadata = await readBrowserVideoMetadata(file);
     if (metadata) {
+      if (videoCaptureStartAt) metadata.capture_start_at = videoCaptureStartAt;
       try {
         await registerVideoMetadata(caseId, record.id, metadata);
       } catch {
