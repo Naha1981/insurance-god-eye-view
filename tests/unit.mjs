@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { buildCaseAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
+import { buildCaseAssessment, buildTrajectoryAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
 import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
 import { normalizeTelemetry, enrichTelemetry } from '../src/evidence/geospatial.js';
 import { buildTrajectorySegments, summarizeTrajectory, interpolateTrajectory, interpolatePosition } from '../src/evidence/trajectory.js';
@@ -46,6 +46,29 @@ assert.equal(correlated.length, 1);
 assert.equal(correlated[0].evidenceCount, 2);
 assert.equal(correlated[0].dominantSource, 'CCTV');
 
+const trajectoryInput = [
+  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
+  { id: 'b', timestamp: '2026-08-18T12:31:02Z', lat: -26.2467, lon: 28.0207, accuracyMeters: 5 },
+  { id: 'c', timestamp: '2026-08-18T12:31:04Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 10 },
+];
+
+const trajectory = buildTrajectorySegments(trajectoryInput);
+assert.equal(trajectory.length, 2);
+assert.equal(trajectory[0].quality, 'HIGH');
+assert.equal(trajectory[0].interpolated, false);
+assert.ok(trajectory[0].uncertaintyMeters >= 5);
+
+const summary = summarizeTrajectory(trajectoryInput);
+assert.equal(summary.pointCount, 3);
+assert.equal(summary.segmentCount, 2);
+assert.ok(summary.totalDistanceMeters > 0);
+assert.equal(summary.durationSeconds, 4);
+
+const integratedTrajectory = buildTrajectoryAssessment(trajectoryInput);
+assert.equal(integratedTrajectory.telemetry.length, 3);
+assert.equal(integratedTrajectory.segments.length, 2);
+assert.equal(integratedTrajectory.summary.segmentCount, 2);
+
 const assessment = buildCaseAssessment({
   evidence: [
     { id: 'e1', timestamp: '2026-08-18T12:31:46Z', type: 'GPS', source: 'GPS', confidence: 'HIGH', supportsClaim: 'claim-1' },
@@ -54,11 +77,13 @@ const assessment = buildCaseAssessment({
   ],
   claims: [{ id: 'claim-1', text: 'Vehicle A entered the intersection before impact.' }],
   requiredEvidence: ['GPS', 'CCTV', 'DASHCAM'],
+  telemetry: trajectoryInput,
 });
 
 assert.equal(assessment.claims[0].result.status, 'CONFLICTING');
 assert.deepEqual(findMissingEvidence(['GPS', 'DASHCAM'], assessment.evidence), ['DASHCAM']);
 assert.ok(assessment.overallConfidence > 0);
+assert.equal(assessment.trajectory.summary.segmentCount, 2);
 
 const normalizedTelemetry = normalizeTelemetry([
   { id: 'p2', timestamp: '2026-08-18T14:31:05', latitude: -26.2465, longitude: 28.0206, accuracy_m: 6 },
@@ -70,26 +95,6 @@ assert.equal(normalizedTelemetry[0].sourceTimeZone, 'Africa/Johannesburg');
 const enriched = enrichTelemetry(normalizedTelemetry);
 assert.ok(enriched[1].segmentDistanceMeters > 0);
 assert.ok(enriched[1].derivedSpeedKph > 0);
-
-const trajectory = buildTrajectorySegments([
-  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
-  { id: 'b', timestamp: '2026-08-18T12:31:02Z', lat: -26.2467, lon: 28.0207, accuracyMeters: 5 },
-  { id: 'c', timestamp: '2026-08-18T12:31:04Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 10 },
-]);
-assert.equal(trajectory.length, 2);
-assert.equal(trajectory[0].quality, 'HIGH');
-assert.equal(trajectory[0].interpolated, false);
-assert.ok(trajectory[0].uncertaintyMeters >= 5);
-
-const summary = summarizeTrajectory([
-  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
-  { id: 'b', timestamp: '2026-08-18T12:31:02Z', lat: -26.2467, lon: 28.0207, accuracyMeters: 5 },
-  { id: 'c', timestamp: '2026-08-18T12:31:04Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 10 },
-]);
-assert.equal(summary.pointCount, 3);
-assert.equal(summary.segmentCount, 2);
-assert.ok(summary.totalDistanceMeters > 0);
-assert.equal(summary.durationSeconds, 4);
 
 const midpoint = interpolatePosition({ lat: -26.2466, lon: 28.0205 }, { lat: -26.2468, lon: 28.0209 }, 0.5);
 assert.equal(midpoint.lat, -26.2467);
