@@ -1,5 +1,6 @@
 import { normalizeTelemetry } from './geospatial.js';
 import { buildTrajectorySegments, summarizeTrajectory } from './trajectory.js';
+import { evidenceQualityAssessment, trajectoryQualityAssessment } from './quality.js';
 
 const SOURCE_PRIORITY = {
   EDR: 100,
@@ -14,23 +15,26 @@ const SOURCE_PRIORITY = {
 };
 
 export const normalizeEvidence = (items) => items
-  .map((item, index) => ({
-    id: item.id ?? `E-${String(index + 1).padStart(4, '0')}`,
-    timestamp: item.timestamp,
-    type: String(item.type ?? 'UNKNOWN').toUpperCase(),
-    title: item.title ?? 'Untitled evidence',
-    detail: item.detail ?? '',
-    source: String(item.source ?? 'UNKNOWN').toUpperCase(),
-    confidence: String(item.confidence ?? 'MEDIUM').toUpperCase(),
-    location: item.location ?? null,
-    supportsClaim: item.supportsClaim ?? null,
-    contradictsClaim: item.contradictsClaim ?? null,
-    sourceRef: item.sourceRef ?? null,
-    sha256: item.sha256 ?? null,
-    capturedAt: item.capturedAt ?? item.timestamp ?? null,
-    ingestedAt: item.ingestedAt ?? null,
-    chainOfCustody: item.chainOfCustody ?? null,
-  }))
+  .map((item, index) => {
+    const normalized = {
+      id: item.id ?? `E-${String(index + 1).padStart(4, '0')}`,
+      timestamp: item.timestamp,
+      type: String(item.type ?? 'UNKNOWN').toUpperCase(),
+      title: item.title ?? 'Untitled evidence',
+      detail: item.detail ?? '',
+      source: String(item.source ?? 'UNKNOWN').toUpperCase(),
+      confidence: String(item.confidence ?? 'MEDIUM').toUpperCase(),
+      location: item.location ?? null,
+      supportsClaim: item.supportsClaim ?? null,
+      contradictsClaim: item.contradictsClaim ?? null,
+      sourceRef: item.sourceRef ?? null,
+      sha256: item.sha256 ?? null,
+      capturedAt: item.capturedAt ?? item.timestamp ?? null,
+      ingestedAt: item.ingestedAt ?? null,
+      chainOfCustody: item.chainOfCustody ?? null,
+    };
+    return { ...normalized, quality: evidenceQualityAssessment(normalized) };
+  })
   .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
 export const provenanceScore = (item) => {
@@ -70,15 +74,9 @@ export const evaluateClaim = (claim, evidence) => {
   const supporting = evidence.filter((item) => item.supportsClaim === claim.id);
   const contradicting = evidence.filter((item) => item.contradictsClaim === claim.id);
 
-  if (supporting.length && contradicting.length) {
-    return { status: 'CONFLICTING', supporting, contradicting };
-  }
-  if (supporting.length) {
-    return { status: 'SUPPORTED', supporting, contradicting: [] };
-  }
-  if (contradicting.length) {
-    return { status: 'CONTRADICTED', supporting: [], contradicting };
-  }
+  if (supporting.length && contradicting.length) return { status: 'CONFLICTING', supporting, contradicting };
+  if (supporting.length) return { status: 'SUPPORTED', supporting, contradicting: [] };
+  if (contradicting.length) return { status: 'CONTRADICTED', supporting: [], contradicting };
   return { status: 'NOT_ESTABLISHED', supporting: [], contradicting: [] };
 };
 
@@ -89,20 +87,32 @@ export const findMissingEvidence = (requiredTypes, evidence) => {
 
 export const buildTrajectoryAssessment = (telemetryPoints, options = {}) => {
   const normalizedTelemetry = normalizeTelemetry(telemetryPoints, options);
+  const segments = buildTrajectorySegments(normalizedTelemetry, options);
+  const summary = summarizeTrajectory(normalizedTelemetry, options);
   return {
     telemetry: normalizedTelemetry,
-    segments: buildTrajectorySegments(normalizedTelemetry, options),
-    summary: summarizeTrajectory(normalizedTelemetry, options),
+    segments,
+    summary,
+    quality: trajectoryQualityAssessment(segments),
+  };
+};
+
+export const buildEvidenceQualityAssessment = (evidence = []) => {
+  const normalized = normalizeEvidence(evidence);
+  if (!normalized.length) return { score: 0, label: 'NO DATA', evidenceCount: 0, lowQualityCount: 0 };
+  const score = Math.round(normalized.reduce((sum, item) => sum + item.quality.score, 0) / normalized.length);
+  return {
+    score,
+    label: score >= 85 ? 'HIGH' : score >= 65 ? 'MEDIUM' : score >= 45 ? 'LOW' : 'VERY LOW',
+    evidenceCount: normalized.length,
+    lowQualityCount: normalized.filter((item) => item.quality.score < 65).length,
   };
 };
 
 export const buildCaseAssessment = ({ evidence = [], claims = [], requiredEvidence = [], telemetry = [] }) => {
   const normalized = normalizeEvidence(evidence);
   const correlations = correlateEvents(normalized);
-  const assessments = claims.map((claim) => ({
-    claim,
-    result: evaluateClaim(claim, normalized),
-  }));
+  const assessments = claims.map((claim) => ({ claim, result: evaluateClaim(claim, normalized) }));
   const trajectory = telemetry.length ? buildTrajectoryAssessment(telemetry) : null;
 
   return {
@@ -111,6 +121,7 @@ export const buildCaseAssessment = ({ evidence = [], claims = [], requiredEviden
     claims: assessments,
     trajectory,
     missingEvidence: findMissingEvidence(requiredEvidence, normalized),
+    evidenceQuality: buildEvidenceQualityAssessment(normalized),
     overallConfidence: normalized.length
       ? Math.round(normalized.reduce((sum, item) => sum + provenanceScore(item), 0) / normalized.length)
       : 0,
