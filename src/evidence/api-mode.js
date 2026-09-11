@@ -5,10 +5,12 @@ import {
   getCase,
   getMe,
   getStoredToken,
+  importTelemetryCsv,
   isApiConfigured,
   listCases,
   listEvidence,
   listTelemetry,
+  listTelemetryProvenance,
   login,
   uploadEvidence,
 } from './api.js';
@@ -45,6 +47,12 @@ style.textContent = `
   .telemetry-metric span { display: block; color: #7e97ad; font: 10px ui-monospace, monospace; text-transform: uppercase; }
   .telemetry-metric strong { display: block; margin-top: 4px; color: #f4f8fb; font-size: 15px; }
   .telemetry-quality { margin-top: 10px; color: #9fbed4; font-size: 11px; line-height: 1.45; }
+  .telemetry-import { margin-top: 12px; padding-top: 12px; border-top: 1px solid #20384d; }
+  .telemetry-import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .telemetry-import select, .telemetry-import button { box-sizing: border-box; width: 100%; padding: 10px 11px; border: 1px solid #27415a; background: #07121f; color: #fff; }
+  .telemetry-import button { background: #17324a; cursor: pointer; font-weight: 700; }
+  .telemetry-import button:disabled { opacity: .55; cursor: wait; }
+  .telemetry-import-status { margin-top: 8px; color: #9fbed4; font: 11px/1.45 ui-monospace, monospace; }
 `;
 document.head.appendChild(style);
 
@@ -165,9 +173,52 @@ const renderTelemetryPanel = (points) => {
       <div class="telemetry-metric"><span>Signal quality</span><strong>${confidence}%</strong></div>
     </div>
     <div class="telemetry-quality">${summary.segmentCount} observed trajectory segments · ${summary.lowConfidenceSegments} low-confidence segments · average reported accuracy ${avgAccuracy == null ? 'unknown' : `${avgAccuracy.toFixed(1)} m`}. Movement shown on the map is evidence reconstruction, not recorded crash footage.</div>
+    <div class="telemetry-import">
+      <div class="section-kicker">RAW GPS / TELEMATICS IMPORT</div>
+      <div class="telemetry-import-grid">
+        <select id="telemetrySourceTimezone" aria-label="Telemetry source timezone">
+          <option value="Africa/Johannesburg" selected>Africa/Johannesburg</option>
+          <option value="UTC">UTC</option>
+        </select>
+        <button id="telemetryImportButton" type="button">IMPORT CSV</button>
+      </div>
+      <input id="telemetryImportFile" type="file" accept=".csv,text/csv" hidden />
+      <div id="telemetryImportStatus" class="telemetry-import-status" aria-live="polite">Original CSV is retained as evidence; normalized trajectory points are derived and provenance-linked.</div>
+    </div>
   `;
+
+  const importButton = panel.querySelector('#telemetryImportButton');
+  const importFile = panel.querySelector('#telemetryImportFile');
+  const timezoneSelect = panel.querySelector('#telemetrySourceTimezone');
+  const importStatus = panel.querySelector('#telemetryImportStatus');
+  importButton?.addEventListener('click', () => importFile?.click());
+  importFile?.addEventListener('change', async () => {
+    const [file] = importFile.files ?? [];
+    if (!file) return;
+    importButton.disabled = true;
+    importStatus.textContent = `READING ${file.name}…`;
+    try {
+      const result = await importTelemetryCsv(CASE_KEY_VALUE(), { file, sourceTimezone: timezoneSelect.value, source: 'INVESTIGATOR_GPS_IMPORT' });
+      const refreshed = await listTelemetry(CASE_KEY_VALUE());
+      const assessmentAfterImport = renderTelemetryPanel(refreshed);
+      if (assessmentAfterImport && typeof window.claimtraceRenderTelemetry === 'function') {
+        window.claimtraceRenderTelemetry({ points: refreshed, segments: assessmentAfterImport.segments });
+      }
+      const provenance = await listTelemetryProvenance(CASE_KEY_VALUE());
+      importStatus.textContent = `IMPORTED ${result.point_count} POINTS · ${result.rejected_rows} REJECTED · ${Math.round(result.total_distance_meters)} m · EVIDENCE ${result.evidence_id} · ${provenance.length} PROVENANCE LINKS`;
+      importFile.value = '';
+      return;
+    } catch (error) {
+      if (error?.status === 401) clearStoredToken();
+      importStatus.textContent = `IMPORT FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
+    } finally {
+      importButton.disabled = false;
+    }
+  });
   return assessment;
 };
+
+const CASE_KEY_VALUE = () => sessionStorage.getItem(CASE_KEY) || '';
 
 const installApiIntake = (caseId) => {
   const oldButton = document.querySelector('#addEvidence');
