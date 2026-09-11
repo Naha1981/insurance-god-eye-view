@@ -49,6 +49,7 @@
 - [~] Gap interpolation primitives with explicit interpolation flags — implemented, CI verification pending
 - [~] Integrate trajectory assessment into case engine — implemented, CI verification pending
 - [~] Persisted telemetry rendered in Cesium reconstruction scene with investigator quality panel — implemented, CI verification pending
+- [~] Investigator-facing telemetry CSV import controls with timezone selection and provenance summary — implemented, CI verification pending
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
 - [ ] Video frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
