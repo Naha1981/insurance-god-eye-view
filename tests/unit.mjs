@@ -30,6 +30,8 @@ assert.match(apiMode, /listTelemetry\(selectedCase\.id\)/);
 assert.match(apiMode, /buildTrajectoryAssessment/);
 assert.match(apiMode, /claimtraceRenderTelemetry/);
 assert.match(apiMode, /telemetryPanel/);
+assert.match(apiMode, /capture time not asserted from filesystem metadata/);
+assert.doesNotMatch(apiMode, /capturedAt: file\.lastModified/);
 assert.match(apiClient, /Authorization/);
 assert.match(apiClient, /\/v1\/auth\/login/);
 assert.match(apiClient, /\/v1\/cases/);
