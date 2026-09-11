@@ -31,7 +31,8 @@
 - [x] Render backend/static-site deployment blueprint
 - [ ] Dashcam/video metadata intake
 - [ ] Photograph EXIF extraction
-- [ ] GPS/telematics CSV/JSON intake
+- [~] GPS/telematics JSON ingestion and normalized persistence — implemented, CI verification pending
+- [ ] GPS/telematics CSV intake
 - [ ] PDF/police-report intake
 - [ ] Weather and road-context adapters
 - [ ] Dedicated immutable object storage for production evidence media
@@ -41,8 +42,9 @@
 - [x] Event correlation
 - [x] Claim consistency checks
 - [x] Missing evidence detection
-- [ ] Normalize timestamps to UTC + local display timezone
-- [ ] Geospatial coordinate normalization
+- [~] Normalize telemetry timestamps to UTC + local display timezone — implemented, CI verification pending
+- [~] Geospatial coordinate normalization — implemented, CI verification pending
+- [~] Derive telemetry segment distance and speed — implemented, CI verification pending
 - [ ] Trajectory interpolation with uncertainty
 - [ ] Confidence/data-quality model backed by source evidence
 
