@@ -61,6 +61,27 @@ def test_case_and_evidence_lifecycle(client):
     assert listed.json()[0]["id"] == evidence["id"]
 
 
+def test_naive_evidence_capture_time_is_rejected(client):
+    case_id = client.post("/v1/cases", json={"title": "Evidence time validation"}).json()["id"]
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence",
+        json={"type": "PHOTO", "source": "USER_UPLOAD", "sha256": "e" * 64, "captured_at": "2026-08-18T12:31:50", "media_type": "image/jpeg"},
+    )
+    assert response.status_code == 422
+    assert "captured_at" in response.text
+
+
+def test_naive_uploaded_evidence_capture_time_is_rejected(client):
+    case_id = client.post("/v1/cases", json={"title": "Upload time validation"}).json()["id"]
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence/upload",
+        data={"type": "PHOTO", "source": "USER_UPLOAD", "captured_at": "2026-08-18T12:31:50"},
+        files={"file": ("scene.jpg", b"synthetic image bytes", "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert "captured_at" in response.text
+
+
 def test_file_upload_hashes_persists_and_serves_original(client):
     case_id = client.post("/v1/cases", json={"title": "Upload case"}).json()["id"]
     fixture = b"ClaimTrace server-side evidence intake fixture"
@@ -97,6 +118,11 @@ def test_video_metadata_is_tenant_scoped_and_linked_to_video_evidence(client):
     fetched = client.get(f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata")
     assert fetched.status_code == 200
     assert fetched.json()["height"] == 1080
+    duplicate = client.post(
+        f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata",
+        json={"duration_seconds": 92.0, "width": 1920, "height": 1080, "metadata_source": "BROWSER_MEDIA_ELEMENT", "metadata_version": "1"},
+    )
+    assert duplicate.status_code == 409
 
     photo = client.post(
         f"/v1/cases/{case_id}/evidence",
