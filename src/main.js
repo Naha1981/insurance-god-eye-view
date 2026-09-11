@@ -169,7 +169,7 @@ evidenceFileInput.addEventListener('change', async () => {
       source: 'USER_UPLOAD',
       sourceRef: file.name,
       sha256,
-      capturedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+      capturedAt: null,
       ingestedAt: new Date().toISOString(),
       mediaType: file.type || null,
       sizeBytes: file.size,
@@ -178,18 +178,18 @@ evidenceFileInput.addEventListener('change', async () => {
     if (!validation.valid) throw new Error(validation.errors.join('; '));
     EVIDENCE.push({
       id: record.id,
-      time: new Date(record.capturedAt ?? record.ingestedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+      time: new Date(record.ingestedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
       type: record.type,
       source: record.source,
       title: record.sourceRef,
-      detail: `${record.mediaType || 'file'} · ${record.sizeBytes ?? 0} bytes · SHA-256 registered`,
+      detail: `${record.mediaType || 'file'} · ${record.sizeBytes ?? 0} bytes · SHA-256 registered · capture time not asserted`,
       confidence: 'MEDIUM',
       provenance: 'SOURCE-LINKED',
       sha256: record.sha256,
       chainOfCustody: record.chainOfCustody,
     });
     renderEvidenceRegister();
-    intakeStatus.textContent = `REGISTERED ${record.id} · SHA-256 ${record.sha256.slice(0, 16)}…`;
+    intakeStatus.textContent = `REGISTERED ${record.id} · SHA-256 ${record.sha256.slice(0, 16)}… · capture time not asserted`;
     evidenceFileInput.value = '';
   } catch (error) {
     intakeStatus.textContent = `INTAKE FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
