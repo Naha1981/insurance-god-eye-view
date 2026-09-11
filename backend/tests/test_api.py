@@ -1,10 +1,20 @@
 from datetime import datetime, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app import storage
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_storage(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLAIMTRACE_DB_PATH", str(tmp_path / "claimtrace.sqlite3"))
+    monkeypatch.setenv("CLAIMTRACE_STORAGE_ROOT", str(tmp_path / "evidence"))
+    storage.init_database()
+    storage.reset_database()
 
 
 def test_health():
@@ -54,6 +64,33 @@ def test_case_and_evidence_lifecycle():
     assert listed.json()[0]["id"] == evidence["id"]
 
 
+def test_file_upload_hashes_and_persists_original():
+    case_id = client.post("/v1/cases", json={"title": "Upload case"}).json()["id"]
+    fixture = b"ClaimTrace server-side evidence intake fixture"
+
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence/upload",
+        data={"type": "PHOTO", "source": "USER_UPLOAD", "claimed_sha256": __import__("hashlib").sha256(fixture).hexdigest()},
+        files={"file": ("scene.txt", fixture, "text/plain")},
+    )
+    assert response.status_code == 201
+    evidence = response.json()
+    assert evidence["sha256"] == __import__("hashlib").sha256(fixture).hexdigest()
+    assert evidence["size_bytes"] == len(fixture)
+    assert evidence["artifact_path"]
+
+    artifact = storage.Path(evidence["artifact_path"])
+    assert artifact.exists()
+    assert artifact.read_bytes() == fixture
+
+    duplicate = client.post(
+        f"/v1/cases/{case_id}/evidence/upload",
+        data={"type": "PHOTO"},
+        files={"file": ("scene.txt", fixture, "text/plain")},
+    )
+    assert duplicate.status_code == 409
+
+
 def test_invalid_hash_is_rejected():
     response = client.post(
         "/v1/cases",
@@ -70,3 +107,17 @@ def test_invalid_hash_is_rejected():
         },
     )
     assert invalid.status_code == 422
+
+
+def test_invalid_location_and_naive_incident_time_are_rejected():
+    invalid_location = client.post(
+        "/v1/cases",
+        json={"title": "Location case", "location": {"lat": 95, "lon": 28}},
+    )
+    assert invalid_location.status_code == 422
+
+    naive_time = client.post(
+        "/v1/cases",
+        json={"title": "Time case", "incident_at": "2026-08-18T12:31:50"},
+    )
+    assert naive_time.status_code == 422
