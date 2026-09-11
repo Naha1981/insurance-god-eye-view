@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildCaseAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
 import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
+import { normalizeTelemetry, enrichTelemetry } from '../src/evidence/geospatial.js';
+import { buildTrajectorySegments, summarizeTrajectory, interpolateTrajectory, interpolatePosition } from '../src/evidence/trajectory.js';
 
 const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
 const apiMode = await readFile(new URL('../src/evidence/api-mode.js', import.meta.url), 'utf8');
@@ -58,6 +60,48 @@ assert.equal(assessment.claims[0].result.status, 'CONFLICTING');
 assert.deepEqual(findMissingEvidence(['GPS', 'DASHCAM'], assessment.evidence), ['DASHCAM']);
 assert.ok(assessment.overallConfidence > 0);
 
+const normalizedTelemetry = normalizeTelemetry([
+  { id: 'p2', timestamp: '2026-08-18T14:31:05', latitude: -26.2465, longitude: 28.0206, accuracy_m: 6 },
+  { id: 'p1', timestamp: '2026-08-18T14:31:00', latitude: -26.2466, longitude: 28.0205, accuracy_m: 4 },
+]);
+assert.deepEqual(normalizedTelemetry.map((point) => point.id), ['p1', 'p2']);
+assert.equal(normalizedTelemetry[0].assumedTimeZone, true);
+assert.equal(normalizedTelemetry[0].sourceTimeZone, 'Africa/Johannesburg');
+const enriched = enrichTelemetry(normalizedTelemetry);
+assert.ok(enriched[1].segmentDistanceMeters > 0);
+assert.ok(enriched[1].derivedSpeedKph > 0);
+
+const trajectory = buildTrajectorySegments([
+  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
+  { id: 'b', timestamp: '2026-08-18T12:31:02Z', lat: -26.2467, lon: 28.0207, accuracyMeters: 5 },
+  { id: 'c', timestamp: '2026-08-18T12:31:04Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 10 },
+]);
+assert.equal(trajectory.length, 2);
+assert.equal(trajectory[0].quality, 'HIGH');
+assert.equal(trajectory[0].interpolated, false);
+assert.ok(trajectory[0].uncertaintyMeters >= 5);
+
+const summary = summarizeTrajectory([
+  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
+  { id: 'b', timestamp: '2026-08-18T12:31:02Z', lat: -26.2467, lon: 28.0207, accuracyMeters: 5 },
+  { id: 'c', timestamp: '2026-08-18T12:31:04Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 10 },
+]);
+assert.equal(summary.pointCount, 3);
+assert.equal(summary.segmentCount, 2);
+assert.ok(summary.totalDistanceMeters > 0);
+assert.equal(summary.durationSeconds, 4);
+
+const midpoint = interpolatePosition({ lat: -26.2466, lon: 28.0205 }, { lat: -26.2468, lon: 28.0209 }, 0.5);
+assert.equal(midpoint.lat, -26.2467);
+assert.equal(midpoint.lon, 28.0207);
+
+const interpolated = interpolateTrajectory([
+  { id: 'a', timestamp: '2026-08-18T12:31:00Z', lat: -26.2466, lon: 28.0205, accuracyMeters: 5 },
+  { id: 'b', timestamp: '2026-08-18T12:31:05Z', lat: -26.2468, lon: 28.0209, accuracyMeters: 5 },
+], { maxGapSeconds: 10, stepSeconds: 1 });
+assert.equal(interpolated.length, 6);
+assert.equal(interpolated.filter((point) => point.interpolated).length, 4);
+
 const helloHash = await hashBytes(new TextEncoder().encode('hello'));
 assert.equal(helloHash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
 
@@ -84,4 +128,4 @@ assert.equal(reviewed.chainOfCustody.length, 2);
 assert.notEqual(reviewed.id, undefined);
 assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
 
-console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case checks');
+console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + trajectory checks');
