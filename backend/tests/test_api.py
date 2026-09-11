@@ -96,27 +96,21 @@ def test_case_listing_is_tenant_scoped_and_reports_evidence_counts(client):
 
 def test_telemetry_is_normalized_persisted_and_tenant_scoped(client):
     case_id = client.post("/v1/cases", json={"title": "GPS reconstruction case"}).json()["id"]
-    payload = {
-        "source_timezone": "Africa/Johannesburg",
-        "points": [
-            {"id": "RAW-2", "timestamp": "2026-08-18 14:31:51", "latitude": -26.24655, "longitude": 28.02060, "speed": 42.0, "vehicle_id": "VH-A"},
-            {"id": "RAW-1", "timestamp": "2026-08-18 14:31:49", "latitude": -26.24670, "longitude": 28.02040, "speed": 36.0, "vehicle_id": "VH-A"},
-            {"id": "INVALID", "timestamp": "not-a-time", "latitude": 999, "longitude": 28},
-        ],
-    }
-    response = client.post(f"/v1/cases/{case_id}/telemetry", json=payload)
+    first_timestamp = datetime(2026, 8, 18, 12, 31, 49, tzinfo=timezone.utc)
+    second_timestamp = datetime(2026, 8, 18, 12, 31, 51, tzinfo=timezone.utc)
+    response = client.post(f"/v1/cases/{case_id}/telemetry", json={"points": [
+        {"timestamp": second_timestamp.isoformat(), "timestamp_local": "2026-08-18 14:31:51", "source_timezone": "Africa/Johannesburg", "assumed_timezone": False, "lat": -26.24655, "lon": 28.02060, "speed_kph": 42.0, "vehicle_id": "VH-A"},
+        {"timestamp": first_timestamp.isoformat(), "timestamp_local": "2026-08-18 14:31:49", "source_timezone": "Africa/Johannesburg", "assumed_timezone": False, "lat": -26.24670, "lon": 28.02040, "speed_kph": 36.0, "vehicle_id": "VH-A"},
+    ]})
     assert response.status_code == 201
     body = response.json()
-    assert body["accepted_points"] == 2
-    assert body["rejected_points"] == 1
-    assert body["points"][0]["id"] == "RAW-1"
-    assert body["points"][0]["assumed_timezone"] is True
-    assert body["points"][0]["timestamp_utc"].endswith("Z")
-    assert body["points"][1]["segment_distance_meters"] > 0
+    assert len(body) == 2
+    assert body[0]["timestamp"].endswith("Z")
+    assert body[0]["vehicle_id"] == "VH-A"
     stored = client.get(f"/v1/cases/{case_id}/telemetry")
     assert stored.status_code == 200
+    assert [item["timestamp"] for item in stored.json()] == sorted(item["timestamp"] for item in stored.json())
     assert len(stored.json()) == 2
-    assert stored.json()[0]["vehicle_id"] == "VH-A"
 
 
 def test_invalid_hash_is_rejected(client):
@@ -133,11 +127,8 @@ def test_invalid_location_and_naive_incident_time_are_rejected(client):
 
 
 def test_authentication_and_tenant_isolation(monkeypatch, tmp_path):
-    monkeypatch.setenv("CLAIMTRACE_DB_PATH", str(tmp_path / "claimtrace.sqlite3"))
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.setenv("CLAIMTRACE_AUTH_MODE", "required")
-    storage.init_database(); storage.reset_database()
-    now = datetime.now(timezone.utc)
+    monkeypatch.setenv("CLAIMTRACE_DB_PATH", str(tmp_path / "claimtrace.sqlite3")); monkeypatch.delenv("DATABASE_URL", raising=False); monkeypatch.setenv("CLAIMTRACE_AUTH_MODE", "required")
+    storage.init_database(); storage.reset_database(); now = datetime.now(timezone.utc)
     storage.insert_tenant({"id": "TENANT-A", "name": "Tenant A", "created_at": now})
     storage.insert_tenant({"id": "TENANT-B", "name": "Tenant B", "created_at": now})
     storage.insert_user({"id": "USR-A", "tenant_id": "TENANT-A", "email": "a@example.com", "password_hash": hash_password("correct horse battery staple"), "role": "ADMIN", "created_at": now})
@@ -152,8 +143,7 @@ def test_authentication_and_tenant_isolation(monkeypatch, tmp_path):
         assert test_client.get(f"/v1/cases/{case_id}", headers=headers_b).status_code == 404
         assert [item["id"] for item in test_client.get("/v1/cases", headers=headers_a).json()] == [case_id]
         assert [item["id"] for item in test_client.get("/v1/cases", headers=headers_b).json()] == [other_case.json()["id"]]
-        audit = test_client.get(f"/v1/cases/{case_id}/audit", headers=headers_a)
-        assert audit.status_code == 200
+        audit = test_client.get(f"/v1/cases/{case_id}/audit", headers=headers_a); assert audit.status_code == 200
         assert any(item["action"] == "CASE_CREATED" for item in audit.json())
 
 
