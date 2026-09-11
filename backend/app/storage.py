@@ -7,7 +7,7 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import Column, DateTime, Float, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select
+from sqlalchemy import Column, DateTime, Float, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text
 from sqlalchemy.engine import Connection, Engine
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "claimtrace.sqlite3"
@@ -56,7 +56,9 @@ def init_database() -> None:
 def reset_database() -> None:
     db_engine = engine()
     with db_engine.begin() as connection:
-        for table in (audit_events, video_metadata, telemetry_points, evidence, cases, sessions, users, tenants): connection.execute(delete(table))
+        connection.execute(text("DELETE FROM telemetry_evidence_links"))
+        for table in (audit_events, video_metadata, telemetry_points, evidence, cases, sessions, users, tenants):
+            connection.execute(delete(table))
     db_engine.dispose()
 
 def insert_tenant(tenant: dict[str, Any]) -> None:
