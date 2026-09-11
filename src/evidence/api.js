@@ -43,9 +43,11 @@ const readBrowserVideoMetadata = (file) => new Promise((resolve) => {
   const video = document.createElement('video');
   const objectUrl = URL.createObjectURL(file);
   let settled = false;
+  const timer = setTimeout(() => finish(null), 10_000);
   const finish = (metadata) => {
     if (settled) return;
     settled = true;
+    clearTimeout(timer);
     URL.revokeObjectURL(objectUrl);
     video.removeAttribute('src');
     video.load();
@@ -68,7 +70,13 @@ export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 
   const record = await request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/upload`, { method: 'POST', body: form });
   if ((type === 'DASHCAM' || type === 'CCTV') && file?.type?.startsWith('video/')) {
     const metadata = await readBrowserVideoMetadata(file);
-    if (metadata) await registerVideoMetadata(caseId, record.id, metadata);
+    if (metadata) {
+      try {
+        await registerVideoMetadata(caseId, record.id, metadata);
+      } catch {
+        // Evidence is already registered; metadata enrichment is best-effort.
+      }
+    }
   }
   return record;
 };
