@@ -6,3 +6,7 @@ dist/
 .env.*
 !.env.example
 coverage/
+__pycache__/
+.pytest_cache/
+.venv/
+backend/.venv/
