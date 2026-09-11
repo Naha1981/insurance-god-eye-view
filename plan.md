@@ -45,7 +45,9 @@
 - [~] Normalize telemetry timestamps to UTC + local display timezone — implemented, CI verification pending
 - [~] Geospatial coordinate normalization — implemented, CI verification pending
 - [~] Derive telemetry segment distance and speed — implemented, CI verification pending
-- [ ] Trajectory interpolation with uncertainty
+- [~] Trajectory segment reconstruction with quality and uncertainty estimates — implemented, CI verification pending
+- [~] Gap interpolation primitives with explicit interpolation flags — implemented, CI verification pending
+- [~] Integrate trajectory assessment into case engine — implemented, CI verification pending
 - [ ] Confidence/data-quality model backed by source evidence
 
 ## Phase 4 — Commercial pilot
