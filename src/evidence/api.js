@@ -45,6 +45,20 @@ export const importTelemetryCsv = async (caseId, { file, sourceTimezone = 'Afric
   return request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry/import`, { method: 'POST', body: form });
 };
 
+export const getEvidenceArtifact = async (caseId, evidenceId) => {
+  if (!API_BASE) throw new Error('ClaimTrace API is not configured');
+  const headers = { Accept: '*/*' };
+  const token = getStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/artifact`, { headers });
+  if (!response.ok) {
+    let detail = `Evidence artifact request failed (${response.status})`;
+    try { detail = (await response.json()).detail ?? detail; } catch { /* preserve HTTP status */ }
+    const error = new Error(detail); error.status = response.status; throw error;
+  }
+  return { blob: await response.blob(), mediaType: response.headers.get('Content-Type') || 'application/octet-stream' };
+};
+
 const readBrowserVideoMetadata = (file) => new Promise((resolve) => {
   if (!file?.type?.startsWith('video/') || typeof document === 'undefined' || typeof URL === 'undefined') {
     resolve(null);
