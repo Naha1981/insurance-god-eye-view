@@ -158,6 +158,15 @@ def insert_case(case: dict[str, Any]) -> None:
         connection.execute(insert(cases).values(**case))
 
 
+def _case_result(row: Any, evidence_count: int) -> dict[str, Any]:
+    result = dict(row)
+    location_json = result.pop("location_json", None)
+    result["location"] = json.loads(location_json) if location_json else None
+    result["evidence_count"] = int(evidence_count)
+    result.pop("tenant_id", None)
+    return result
+
+
 def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
     statement = select(cases).where(cases.c.id == case_id)
     if tenant_id is not None:
@@ -167,12 +176,21 @@ def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | Non
         if not row:
             return None
         count = connection.execute(select(func.count()).select_from(evidence).where(evidence.c.case_id == case_id)).scalar_one()
-    result = dict(row)
-    location_json = result.pop("location_json", None)
-    result["location"] = json.loads(location_json) if location_json else None
-    result["evidence_count"] = int(count)
-    result.pop("tenant_id", None)
-    return result
+    return _case_result(row, count)
+
+
+def list_cases(tenant_id: str) -> list[dict[str, Any]]:
+    with connect() as connection:
+        rows = connection.execute(
+            select(cases).where(cases.c.tenant_id == tenant_id).order_by(cases.c.created_at.desc())
+        ).mappings().all()
+        counts = connection.execute(
+            select(evidence.c.case_id, func.count().label("count"))
+            .where(evidence.c.tenant_id == tenant_id)
+            .group_by(evidence.c.case_id)
+        ).all()
+    count_map = {row.case_id: row.count for row in counts}
+    return [_case_result(row, count_map.get(row.id, 0)) for row in rows]
 
 
 def insert_evidence(record: dict[str, Any]) -> None:
