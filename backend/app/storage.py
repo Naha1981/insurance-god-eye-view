@@ -17,7 +17,6 @@ tenants = Table(
     Column("name", String(240), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
-
 users = Table(
     "users", metadata,
     Column("id", String(120), primary_key=True),
@@ -27,7 +26,6 @@ users = Table(
     Column("role", String(40), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
-
 sessions = Table(
     "sessions", metadata,
     Column("id", String(120), primary_key=True),
@@ -36,7 +34,6 @@ sessions = Table(
     Column("expires_at", DateTime(timezone=True), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
-
 cases = Table(
     "cases", metadata,
     Column("id", String(120), primary_key=True),
@@ -47,7 +44,6 @@ cases = Table(
     Column("status", String(40), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
-
 evidence = Table(
     "evidence", metadata,
     Column("id", String(120), primary_key=True),
@@ -65,7 +61,6 @@ evidence = Table(
     Column("size_bytes", Integer),
     Column("chain_of_custody_json", Text, nullable=False),
 )
-
 audit_events = Table(
     "audit_events", metadata,
     Column("id", String(120), primary_key=True),
@@ -171,11 +166,10 @@ def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | Non
         row = connection.execute(statement).mappings().first()
         if not row:
             return None
-        count = connection.execute(
-            select(func.count()).select_from(evidence).where(evidence.c.case_id == case_id)
-        ).scalar_one()
+        count = connection.execute(select(func.count()).select_from(evidence).where(evidence.c.case_id == case_id)).scalar_one()
     result = dict(row)
-    result["location"] = json.loads(result.pop("location_json")) if result.get("location_json") else None
+    location_json = result.pop("location_json", None)
+    result["location"] = json.loads(location_json) if location_json else None
     result["evidence_count"] = int(count)
     result.pop("tenant_id", None)
     return result
