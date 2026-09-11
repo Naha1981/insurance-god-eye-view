@@ -184,7 +184,7 @@ async def upload_evidence(
         raise HTTPException(status_code=409, detail="Evidence with this SHA-256 hash is already registered")
 
     evidence_id = f"E-{uuid4()}"
-    path = storage.write_original(case_id, evidence_id, file.filename or "evidence.bin", content)
+    artifact_key = storage.write_original(case_id, evidence_id, file.filename or "evidence.bin", content)
     ingested_at = now()
     evidence = normalize_evidence({
         "id": evidence_id,
@@ -192,7 +192,7 @@ async def upload_evidence(
         "type": type,
         "source": source,
         "source_ref": file.filename or "evidence.bin",
-        "artifact_path": str(path),
+        "artifact_path": artifact_key,
         "sha256": sha256,
         "captured_at": captured_at,
         "ingested_at": ingested_at,
