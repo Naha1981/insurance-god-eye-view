@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from . import auth, storage
+from . import auth, report, storage
 
 SourceType = Literal[
     "DASHCAM", "CCTV", "PHOTO", "POLICE_REPORT", "TELEMATICS", "GPS",
@@ -31,7 +31,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="ClaimTrace Evidence API",
-    version="0.3.0",
+    version="0.4.0",
     description="Authenticated tenant-scoped case and evidence registry for physical-world claim investigations.",
     lifespan=lifespan,
 )
@@ -141,7 +141,7 @@ def audit(principal: auth.Principal, action: str, resource_type: str | None = No
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.3.0"}
+    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.4.0"}
 
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
@@ -312,6 +312,23 @@ def get_evidence_artifact(case_id: str, evidence_id: str, principal: auth.Princi
     _, content, media_type = artifact
     audit(principal, "EVIDENCE_VIEWED", "EVIDENCE", evidence_id)
     return Response(content=content, media_type=media_type or "application/octet-stream")
+
+
+@app.get("/v1/cases/{case_id}/report")
+def get_case_report(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> Response:
+    case = storage.get_case(case_id, principal.tenant_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    evidence = storage.list_evidence(case_id, principal.tenant_id)
+    audit_events = storage.list_audit_events(principal.tenant_id, case_id)
+    payload = report.build_report(case, evidence, audit_events)
+    document = report.render_html(payload)
+    audit(principal, "REPORT_GENERATED", "CASE", case_id, {"evidence_count": len(evidence)})
+    return Response(
+        content=document,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="claimtrace-{case_id}-report.html"'},
+    )
 
 
 @app.get("/v1/cases/{case_id}/audit")
