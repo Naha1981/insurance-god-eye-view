@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer';
 
 const port = 4173;
+const artifactDir = 'test-artifacts';
 const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)], {
   stdio: ['ignore', 'pipe', 'pipe'],
   shell: process.platform === 'win32',
 });
 
 let browser;
+let page;
 
 const waitForServer = async () => {
   const deadline = Date.now() + 30000;
@@ -25,7 +28,7 @@ const waitForServer = async () => {
 try {
   await waitForServer();
   browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 
   const consoleErrors = [];
   const pageErrors = [];
@@ -35,7 +38,6 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle0', timeout: 30000 });
-
   await page.waitForSelector('#cesiumContainer canvas', { timeout: 15000 });
   await page.waitForSelector('#timeline .timeline-event', { timeout: 5000 });
   await page.waitForSelector('#claims .claim-row', { timeout: 5000 });
@@ -71,7 +73,18 @@ try {
   assert.match(visibleText, /SYNTHETIC DEMO/);
   assert.doesNotMatch(visibleText, /ACTUAL CRASH VIDEO|RECORDED CRASH FOOTAGE/i);
 
+  await mkdir(artifactDir, { recursive: true });
+  await page.screenshot({ path: `${artifactDir}/claimtrace-smoke.png`, fullPage: true });
+  await writeFile(`${artifactDir}/claimtrace-summary.json`, JSON.stringify({ status: 'PASS', checks: 10, result }, null, 2));
+
   console.log(JSON.stringify({ status: 'PASS', checks: 10, result }, null, 2));
+} catch (error) {
+  await mkdir(artifactDir, { recursive: true });
+  if (page) {
+    await page.screenshot({ path: `${artifactDir}/claimtrace-failure.png`, fullPage: true }).catch(() => {});
+  }
+  await writeFile(`${artifactDir}/claimtrace-failure.txt`, `${error.stack || error}\n`).catch(() => {});
+  throw error;
 } finally {
   if (browser) await browser.close();
   server.kill('SIGTERM');
