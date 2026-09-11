@@ -69,6 +69,36 @@ def test_file_upload_hashes_persists_and_serves_original(client):
     assert duplicate.status_code == 409
 
 
+def test_video_metadata_is_tenant_scoped_and_linked_to_video_evidence(client):
+    case_id = client.post("/v1/cases", json={"title": "Dashcam metadata case"}).json()["id"]
+    evidence = client.post(
+        f"/v1/cases/{case_id}/evidence",
+        json={"type": "DASHCAM", "source": "INSURED", "source_ref": "front.mp4", "sha256": "c" * 64, "media_type": "video/mp4", "size_bytes": 2048},
+    ).json()
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata",
+        json={"duration_seconds": 91.25, "width": 1920, "height": 1080, "metadata_source": "BROWSER_MEDIA_ELEMENT", "metadata_version": "1"},
+    )
+    assert response.status_code == 200
+    metadata = response.json()
+    assert metadata["evidence_id"] == evidence["id"]
+    assert metadata["duration_seconds"] == 91.25
+    assert metadata["width"] == 1920
+    fetched = client.get(f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata")
+    assert fetched.status_code == 200
+    assert fetched.json()["height"] == 1080
+
+    photo = client.post(
+        f"/v1/cases/{case_id}/evidence",
+        json={"type": "PHOTO", "source": "INSURED", "source_ref": "scene.jpg", "sha256": "d" * 64, "media_type": "image/jpeg", "size_bytes": 200},
+    ).json()
+    rejected = client.post(
+        f"/v1/cases/{case_id}/evidence/{photo['id']}/video-metadata",
+        json={"duration_seconds": 3},
+    )
+    assert rejected.status_code == 422
+
+
 def test_investigator_report_is_downloadable(client):
     case = client.post("/v1/cases", json={"title": "Reportable collision", "incident_at": datetime(2026, 8, 18, 12, 31, 50, tzinfo=timezone.utc).isoformat(), "location": {"lat": -26.2466, "lon": 28.0205}}).json()
     report = client.get(f"/v1/cases/{case['id']}/report")
