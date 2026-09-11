@@ -47,7 +47,7 @@ def parse_csv(content: bytes, source_timezone: str = "Africa/Johannesburg", *, m
     if not normalized_headers & lon_headers:
         raise TelemetryImportError("Telemetry CSV is missing a longitude column")
 
-    raw_points: list[dict[str, Any]] = []
+    normalized_points: list[dict[str, Any]] = []
     rejected = 0
     for row_number, row in enumerate(reader, start=2):
         if row_number > max_rows + 1:
@@ -57,13 +57,13 @@ def parse_csv(content: bytes, source_timezone: str = "Africa/Johannesburg", *, m
         if point is None:
             rejected += 1
             continue
-        raw_points.append(point)
+        normalized_points.append(point)
 
-    if not raw_points:
+    if not normalized_points:
         raise TelemetryImportError("Telemetry CSV contained no valid coordinate/timestamp rows")
 
     return TelemetryImportResult(
-        points=telemetry.enrich_points(telemetry.normalize_points(raw_points, source_timezone)),
+        points=telemetry.enrich_points(sorted(normalized_points, key=lambda item: item["timestamp_utc"])),
         rejected_rows=rejected,
         source_timezone=source_timezone,
     )
