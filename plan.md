@@ -1,46 +1,53 @@
 # ClaimTrace Build Plan
 
 ## Phase 0 — Foundation
-- [x] Create empty product repository
+- [x] Create product repository
 - [x] Add PRD
-- [ ] Add application shell
-- [ ] Add Cesium globe and South Africa default camera
-- [ ] Add synthetic incident dataset
-- [ ] Add evidence/timeline data model
-- [ ] Add investigation UI
+- [x] Add application shell
+- [x] Add Cesium globe and South Africa default scene
+- [x] Add synthetic incident dataset
+- [x] Add evidence/timeline data model
+- [x] Add investigation UI
 
 ## Phase 1 — Working vertical slice
-- [ ] Render a synthetic collision in a real South African road context
-- [ ] Show Vehicle A/B trajectories
-- [ ] Show incident point and timeline events
-- [ ] Switch between map / terrain / evidence views
-- [ ] Surface evidence provenance and confidence
-- [ ] Compare Claim A and Claim B
-- [ ] Clearly label reconstruction vs source footage
+- [x] Render a synthetic collision scenario in a South African scene
+- [x] Show Vehicle A/B trajectories
+- [x] Show incident point and timeline events
+- [x] Surface evidence provenance and confidence
+- [x] Compare claim statements with supported / contradicted / not-established states
+- [x] Clearly label reconstruction vs source footage
+- [x] Add deterministic unit and browser acceptance tests
 
 ## Phase 2 — Real evidence ingestion
+- [x] Evidence hashing and immutable provenance-record contract
+- [x] Browser evidence intake for pilot/demo workflow
 - [ ] Dashcam/video metadata intake
-- [ ] Photograph intake and EXIF extraction
+- [ ] Photograph EXIF extraction
 - [ ] GPS/telematics CSV/JSON intake
 - [ ] PDF/police-report intake
-- [ ] Evidence hashing and immutable provenance records
 - [ ] Weather and road-context adapters
+- [ ] Production immutable object storage
 
 ## Phase 3 — Reconstruction engine
+- [x] Deterministic evidence normalization
+- [x] Event correlation
+- [x] Claim consistency checks
+- [x] Missing evidence detection
 - [ ] Normalize timestamps to UTC + local display timezone
 - [ ] Geospatial coordinate normalization
 - [ ] Trajectory interpolation with uncertainty
-- [ ] Event correlation
-- [ ] Claim consistency checks
-- [ ] Missing evidence detection
+- [ ] Confidence/data-quality model backed by source evidence
 
 ## Phase 4 — Commercial pilot
+- [x] Investigator evidence register
+- [ ] FastAPI case/evidence service
 - [ ] Investigator case workspace
 - [ ] Exportable investigation report
 - [ ] Secure case sharing
 - [ ] Audit log
 - [ ] Tenant isolation
 - [ ] POPIA/privacy review
+- [ ] Pilot dataset and acceptance criteria
 
 ## Phase 5 — Insurance platform
 - [ ] Claims-system API
@@ -52,9 +59,10 @@
 
 ## Engineering rules
 
-- Do not clone God’s Eye View branding or pretend this is the original project.
+- Do not clone God's Eye View branding or pretend this is the original project.
 - Reuse compatible open-source architectural patterns and dependencies only where licensing permits.
 - Keep provider/data licenses explicit in `DATA_SOURCES.md`.
 - Never present synthetic reconstruction as actual event footage.
 - Every material finding must be traceable to source evidence or clearly marked as an inference.
 - Prefer deterministic rules before probabilistic AI for evidence calculations.
+- Keep the investigation workspace functional when WebGL/Cesium is unavailable.
