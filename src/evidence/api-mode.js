@@ -3,8 +3,10 @@ import {
   createCase,
   downloadReport,
   getCase,
+  getEvidenceArtifact,
   getMe,
   getStoredToken,
+  getVideoMetadata,
   importTelemetryCsv,
   isApiConfigured,
   listCases,
@@ -14,9 +16,11 @@ import {
   login,
   uploadEvidence,
 } from './api.js';
+import { buildFrameEvidenceIndex, frameTimestamp, normalizeVideoSync } from './video-sync.js';
 import { buildTrajectoryAssessment } from './engine.js';
 
 const CASE_KEY = 'claimtrace_case_id';
+let videoArtifactUrl = null;
 
 const style = document.createElement('style');
 style.textContent = `
@@ -53,6 +57,17 @@ style.textContent = `
   .telemetry-import button { background: #17324a; cursor: pointer; font-weight: 700; }
   .telemetry-import button:disabled { opacity: .55; cursor: wait; }
   .telemetry-import-status { margin-top: 8px; color: #9fbed4; font: 11px/1.45 ui-monospace, monospace; }
+  .video-panel { border-color: rgba(74,180,255,.22); }
+  .video-shell { margin-top: 10px; border: 1px solid #20384d; background: #000; }
+  .video-shell video { display: block; width: 100%; max-height: 300px; background: #000; }
+  .video-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .video-meta-grid div { padding: 8px; border: 1px solid #20384d; background: #081522; }
+  .video-meta-grid span { display: block; color: #7e97ad; font: 10px ui-monospace, monospace; text-transform: uppercase; }
+  .video-meta-grid strong { display: block; margin-top: 4px; color: #f4f8fb; font-size: 13px; }
+  .video-sync-status, .video-frame-status { margin-top: 9px; color: #9fbed4; font: 11px/1.45 ui-monospace, monospace; }
+  .video-frame-btn { width: 100%; margin-top: 9px; padding: 9px 11px; border: 1px solid #27415a; background: #17324a; color: #fff; cursor: pointer; font-weight: 700; }
+  .video-frame-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .video-capture-start { margin-top: 8px; color: #8aa4b9; font-size: 11px; line-height: 1.4; }
 `;
 document.head.appendChild(style);
 
@@ -208,9 +223,7 @@ const renderTelemetryPanel = (points) => {
       }
       const provenance = await listTelemetryProvenance(CASE_KEY_VALUE());
       const nextStatus = document.querySelector('#telemetryImportStatus');
-      if (nextStatus) {
-        nextStatus.textContent = `IMPORTED ${result.point_count} POINTS · ${result.rejected_rows} REJECTED · ${Math.round(result.total_distance_meters)} m · EVIDENCE ${result.evidence_id} · ${provenance.length} PROVENANCE LINKS`;
-      }
+      if (nextStatus) nextStatus.textContent = `IMPORTED ${result.point_count} POINTS · ${result.rejected_rows} REJECTED · ${Math.round(result.total_distance_meters)} m · EVIDENCE ${result.evidence_id} · ${provenance.length} PROVENANCE LINKS`;
       return;
     } catch (error) {
       if (error?.status === 401) clearStoredToken();
@@ -224,6 +237,102 @@ const renderTelemetryPanel = (points) => {
   return assessment;
 };
 
+const ensureVideoPanel = () => {
+  let panel = document.querySelector('#videoSyncPanel');
+  if (panel) return panel;
+  const anchor = document.querySelector('#telemetryPanel')?.parentElement;
+  if (!anchor) return null;
+  anchor.insertAdjacentHTML('beforeend', '<div class="panel-block video-panel" id="videoSyncPanel" hidden></div>');
+  panel = document.querySelector('#videoSyncPanel');
+  return panel;
+};
+
+const renderVideoEvidencePanel = async (caseId, records, telemetry) => {
+  const panel = ensureVideoPanel();
+  if (!panel) return;
+  const videoRecord = records.find((record) => (record.type === 'DASHCAM' || record.type === 'CCTV') && String(record.media_type || '').startsWith('video/'));
+  if (!videoRecord) {
+    if (videoArtifactUrl) URL.revokeObjectURL(videoArtifactUrl);
+    videoArtifactUrl = null;
+    panel.hidden = true;
+    panel.innerHTML = '';
+    return;
+  }
+
+  if (videoArtifactUrl) URL.revokeObjectURL(videoArtifactUrl);
+  videoArtifactUrl = null;
+  panel.hidden = false;
+  panel.className = 'panel-block video-panel';
+  panel.innerHTML = `<div class="section-kicker">VIDEO / TELEMETRY CORRELATION</div><h2>${esc(videoRecord.source_ref || videoRecord.id)}</h2><div class="video-sync-status">Loading authenticated evidence artifact and video metadata…</div>`;
+
+  try {
+    const [metadata, artifact] = await Promise.all([
+      getVideoMetadata(caseId, videoRecord.id).catch(() => null),
+      getEvidenceArtifact(caseId, videoRecord.id),
+    ]);
+    videoArtifactUrl = URL.createObjectURL(artifact.blob);
+    const sync = normalizeVideoSync({ captureStartAt: metadata?.capture_start_at ?? null, frameRate: metadata?.frame_rate ?? null, offsetSeconds: 0 });
+    const syncMode = sync.captureStartAt && sync.frameRate && telemetry.length ? 'FRAME + CLOCK SYNC READY' : sync.captureStartAt && telemetry.length ? 'CLOCK SYNC READY · FRAME RATE MISSING' : 'SYNC UNAVAILABLE · VIDEO CLOCK START NOT ASSERTED';
+    panel.innerHTML = `
+      <div class="section-head"><div><div class="section-kicker">VIDEO / TELEMETRY CORRELATION</div><h2>${esc(videoRecord.source_ref || videoRecord.id)}</h2></div><span class="mini-chip">${sync.captureStartAt && sync.frameRate && telemetry.length ? 'SYNC READY' : 'REVIEW'}</span></div>
+      <div class="video-shell"><video id="claimtraceEvidenceVideo" controls preload="metadata" src="${videoArtifactUrl}"></video></div>
+      <div class="video-meta-grid">
+        <div><span>Duration</span><strong>${metadata?.duration_seconds == null ? 'unknown' : `${Number(metadata.duration_seconds).toFixed(1)} s`}</strong></div>
+        <div><span>Frame rate</span><strong>${metadata?.frame_rate == null ? 'unknown' : `${Number(metadata.frame_rate).toFixed(2)} fps`}</strong></div>
+        <div><span>Capture start</span><strong>${sync.captureStartAt ? esc(sync.captureStartAt) : 'not asserted'}</strong></div>
+      </div>
+      <div class="video-sync-status" id="videoSyncLiveStatus">${esc(syncMode)}</div>
+      <button class="video-frame-btn" id="createFrameEvidence" type="button" disabled>CREATE FRAME REFERENCE</button>
+      <div class="video-frame-status" id="videoFrameStatus">Frame references are derived from the authenticated video artifact and asserted capture metadata. They are not automatically legal findings.</div>
+      <div class="video-capture-start">Investigator note: the capture start is never inferred from browser file modification time. Supply authoritative source metadata when available.</div>
+    `;
+
+    const video = panel.querySelector('#claimtraceEvidenceVideo');
+    const syncStatus = panel.querySelector('#videoSyncLiveStatus');
+    const frameButton = panel.querySelector('#createFrameEvidence');
+    const frameStatus = panel.querySelector('#videoFrameStatus');
+    const updateSync = () => {
+      if (!video || !sync.captureStartAt) {
+        if (syncStatus) syncStatus.textContent = 'SYNC UNAVAILABLE · VIDEO CLOCK START NOT ASSERTED';
+        return;
+      }
+      const timestamp = new Date(new Date(sync.captureStartAt).getTime() + video.currentTime * 1000).toISOString();
+      const nearest = telemetry.reduce((best, point) => {
+        if (!best) return point;
+        return Math.abs(new Date(point.timestamp_utc || point.timestamp).getTime() - new Date(timestamp).getTime()) < Math.abs(new Date(best.timestamp_utc || best.timestamp).getTime() - new Date(timestamp).getTime()) ? point : best;
+      }, null);
+      const delta = nearest ? (new Date(nearest.timestamp_utc || nearest.timestamp).getTime() - new Date(timestamp).getTime()) / 1000 : null;
+      if (syncStatus) syncStatus.textContent = nearest && delta !== null
+        ? `CLOCK SYNC · VIDEO ${timestamp} · NEAREST TELEMETRY ${nearest.id || nearest.vehicle_id || 'POINT'} · Δ ${delta.toFixed(2)} s`
+        : `CLOCK SYNC · VIDEO ${timestamp} · NO TELEMETRY POINTS`;
+    };
+    video?.addEventListener('timeupdate', updateSync);
+    video?.addEventListener('loadedmetadata', updateSync);
+    if (sync.captureStartAt && sync.frameRate && telemetry.length) {
+      frameButton.disabled = false;
+      frameButton.addEventListener('click', () => {
+        const frameIndex = Math.max(0, Math.round(video.currentTime * sync.frameRate));
+        const refs = buildFrameEvidenceIndex(videoRecord.id, sync, [frameIndex]);
+        const reference = refs[0];
+        if (!reference?.timestamp) {
+          frameStatus.textContent = 'FRAME REFERENCE NOT CREATED · synchronized timestamp unavailable';
+          return;
+        }
+        const nearest = telemetry.reduce((best, point) => {
+          if (!best) return point;
+          return Math.abs(new Date(point.timestamp_utc || point.timestamp).getTime() - new Date(reference.timestamp).getTime()) < Math.abs(new Date(best.timestamp_utc || best.timestamp).getTime() - new Date(reference.timestamp).getTime()) ? point : best;
+        }, null);
+        frameStatus.textContent = nearest
+          ? `FRAME REF · ${videoRecord.id} · FRAME ${reference.frameIndex} · ${reference.timestamp} · nearest telemetry ${nearest.id || nearest.vehicle_id || 'POINT'}`
+          : `FRAME REF · ${videoRecord.id} · FRAME ${reference.frameIndex} · ${reference.timestamp}`;
+      });
+    }
+  } catch (error) {
+    if (error?.status === 401) clearStoredToken();
+    panel.innerHTML = `<div class="section-kicker">VIDEO / TELEMETRY CORRELATION</div><div class="telemetry-quality">VIDEO LOAD FAILED · ${esc(error instanceof Error ? error.message : 'Unable to retrieve video evidence')}</div>`;
+  }
+};
+
 const CASE_KEY_VALUE = () => sessionStorage.getItem(CASE_KEY) || '';
 
 const installApiIntake = (caseId) => {
@@ -235,6 +344,7 @@ const installApiIntake = (caseId) => {
   document.querySelector('#apiEvidenceType')?.remove();
   document.querySelector('#apiAddEvidence')?.remove();
   document.querySelector('#apiEvidenceFile')?.remove();
+  document.querySelector('#apiVideoCaptureStartAt')?.remove();
   oldButton.hidden = true;
   oldInput.hidden = true;
   oldType.hidden = true;
@@ -247,6 +357,7 @@ const installApiIntake = (caseId) => {
       <option>TELEMATICS</option>
       <option>OTHER</option>
     </select>
+    <input id="apiVideoCaptureStartAt" class="intake-select" type="text" placeholder="VIDEO CLOCK START · ISO-8601 + timezone (optional)" aria-label="Video capture start timestamp" />
     <button id="apiAddEvidence" class="intake-btn">UPLOAD TO CASE</button>
     <input id="apiEvidenceFile" type="file" hidden accept="video/*,image/*,application/pdf,.pdf" />
   `);
@@ -254,7 +365,12 @@ const installApiIntake = (caseId) => {
   const button = document.querySelector('#apiAddEvidence');
   const input = document.querySelector('#apiEvidenceFile');
   const type = document.querySelector('#apiEvidenceType');
+  const captureStart = document.querySelector('#apiVideoCaptureStartAt');
   const status = document.querySelector('#intakeStatus');
+  type.addEventListener('change', () => {
+    captureStart.disabled = !(type.value === 'DASHCAM' || type.value === 'CCTV');
+  });
+  type.dispatchEvent(new Event('change'));
   button.addEventListener('click', () => input.click());
   input.addEventListener('change', async () => {
     const [file] = input.files ?? [];
@@ -262,10 +378,15 @@ const installApiIntake = (caseId) => {
     button.disabled = true;
     status.textContent = `UPLOADING ${file.name}…`;
     try {
-      const record = await uploadEvidence(caseId, { file, type: type.value });
-      renderApiEvidence(await listEvidence(caseId));
+      const requestedCaptureStart = captureStart.disabled ? null : captureStart.value.trim() || null;
+      if (requestedCaptureStart && Number.isNaN(new Date(requestedCaptureStart).getTime())) throw new Error('Video clock start must be a valid ISO-8601 timestamp with timezone.');
+      const videoCaptureStartAt = requestedCaptureStart ? new Date(requestedCaptureStart).toISOString() : null;
+      const record = await uploadEvidence(caseId, { file, type: type.value, videoCaptureStartAt });
+      const records = await listEvidence(caseId);
+      renderApiEvidence(records);
+      await renderVideoEvidencePanel(caseId, records, await listTelemetry(caseId));
       const captureNote = type.value === 'DASHCAM' || type.value === 'CCTV'
-        ? ' · capture time not asserted from filesystem metadata'
+        ? ` · capture time ${videoCaptureStartAt ? 'asserted by investigator input' : 'not asserted from filesystem metadata'}`
         : '';
       status.textContent = `REGISTERED ${record.id} · SERVER SHA-256 ${record.sha256.slice(0, 16)}…${captureNote}`;
       input.value = '';
@@ -413,10 +534,12 @@ const enableApiMode = async () => {
     if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion. Capture time is only asserted when supplied by source metadata or investigator input.';
     installApiIntake(selectedCase.id);
     installReportAction(selectedCase.id);
-    renderApiEvidence(await listEvidence(selectedCase.id));
+    const records = await listEvidence(selectedCase.id);
+    renderApiEvidence(records);
 
+    let telemetry = [];
     try {
-      const telemetry = await listTelemetry(selectedCase.id);
+      telemetry = await listTelemetry(selectedCase.id);
       const assessment = renderTelemetryPanel(telemetry);
       if (assessment && typeof window.claimtraceRenderTelemetry === 'function') {
         window.claimtraceRenderTelemetry({ points: telemetry, segments: assessment.segments });
@@ -433,6 +556,7 @@ const enableApiMode = async () => {
       window.claimtraceClearTelemetry?.();
       window.claimtraceSetSyntheticVisibility?.(true);
     }
+    await renderVideoEvidencePanel(selectedCase.id, records, telemetry);
   };
 
   await refreshCase(caseRecord);
@@ -450,6 +574,10 @@ const enableApiMode = async () => {
     actions.insertBefore(button, actions.firstChild);
   }
 };
+
+window.addEventListener('beforeunload', () => {
+  if (videoArtifactUrl) URL.revokeObjectURL(videoArtifactUrl);
+});
 
 window.addEventListener('load', () => {
   enableApiMode().catch((error) => {
