@@ -50,7 +50,6 @@
 - [~] Integrate trajectory assessment into case engine — implemented, CI verification pending
 - [~] Persisted telemetry rendered in Cesium reconstruction scene with investigator quality panel — implemented, CI verification pending
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
-- [~] Capture timestamp integrity hardening — filesystem modification time is no longer asserted as event capture time
 - [ ] Video frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
 
@@ -67,6 +66,7 @@
 - [ ] Dedicated immutable object storage
 - [ ] Pilot dataset and acceptance criteria
 - [ ] Production deployment verification on Render
+- [~] Database migration foundation with idempotent baseline — implemented, CI verification pending
 
 ## Phase 5 — Insurance platform
 - [ ] Claims-system API
@@ -89,3 +89,4 @@
 - Authenticate API access in deployed mode and scope all case/evidence queries to a tenant.
 - Treat Postgres-stored evidence bytes as pilot storage only; production media belongs in dedicated immutable object storage.
 - Do not mark a feature complete until code exists and CI exercises it.
+- Never infer evidence capture time from browser filesystem modification timestamps.
