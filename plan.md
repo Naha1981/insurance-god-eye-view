@@ -53,7 +53,8 @@
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
 - [~] Authenticated dashcam/CCTV playback with capture-clock synchronization and derived frame reference UI — implemented, CI verification pending
 - [~] Persist synchronized frame references in the case audit trail — implemented, CI verification pending
-- [ ] Video frame extraction / thumbnail generation
+- [~] Deterministic browser frame extraction to PNG with SHA-256 and persisted derived frame artifact — implemented, CI verification pending
+- [ ] Video server-side frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
 
 ## Phase 4 — Commercial pilot
@@ -69,7 +70,7 @@
 - [ ] Dedicated immutable object storage
 - [ ] Pilot dataset and acceptance criteria
 - [ ] Production deployment verification on Render
-- [~] Database migration foundation with idempotent baseline + telemetry provenance migration — implemented, CI verification pending
+- [~] Database migration foundation with idempotent baseline + telemetry provenance migration + frame artifact migration — implemented, CI verification pending
 
 ## Phase 5 — Insurance platform
 - [ ] Claims-system API
