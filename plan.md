@@ -52,6 +52,7 @@
 - [~] Investigator-facing telemetry CSV import controls with timezone selection and provenance summary — implemented, CI verification pending
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
 - [~] Authenticated dashcam/CCTV playback with capture-clock synchronization and derived frame reference UI — implemented, CI verification pending
+- [~] Persist synchronized frame references in the case audit trail — implemented, CI verification pending
 - [ ] Video frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
 
