@@ -6,11 +6,11 @@
 
 **Repository:** `Naha1981/insurance-god-eye-view`
 
-**Technology foundation:** God’s Eye View-style browser geospatial intelligence using Vite + Cesium + modular data layers.
+**Technology foundation:** God's Eye View-style browser geospatial intelligence using Vite + Cesium + modular data layers, with a FastAPI evidence service for pilot deployments.
 
 ## Problem
 
-Motor insurers, claims administrators, loss adjusters and forensic investigators often receive fragmented evidence after a disputed incident: claimant statements, photographs, dashcam footage, telematics, police records, road geometry, weather and third-party reports. The expensive operational problem is reconstructing a defensible event timeline quickly enough to resolve the claim, detect contradictions, identify missing evidence and avoid unnecessary investigation cost.
+Motor insurers, claims administrators, loss adjusters and forensic investigators receive fragmented evidence after disputed incidents: claimant statements, photographs, dashcam footage, telematics, police records, road geometry, weather and third-party reports. The operational problem is reconstructing a defensible event timeline quickly, surfacing contradictions and missing evidence, and preserving provenance while keeping a human investigator in control.
 
 ## Product thesis
 
@@ -18,15 +18,8 @@ ClaimTrace is an **AI-assisted physical-world evidence reconstruction workspace*
 
 ## MVP outcome
 
-Given a claim with:
-- incident coordinates or address
-- incident date/time window
-- claimant/third-party statements
-- photographs and optional dashcam/CCTV video
-- optional GPS/telematics data
-- optional police/adjuster documents
+Given a claim with incident coordinates or address, incident date/time window, statements, photographs, optional dashcam/CCTV video, optional GPS/telematics data, and optional police/adjuster documents, ClaimTrace produces:
 
-ClaimTrace produces:
 1. incident map and scene context
 2. evidence timeline
 3. vehicle/actor trajectories where data supports them
@@ -36,18 +29,24 @@ ClaimTrace produces:
 7. confidence and data-quality indicators
 8. investigator-ready report structure
 
+## Evidence intake contract
+
+Every registered evidence item must retain a stable ID, case ID, type, source, source reference, SHA-256 where the original artifact is available, capture/ingestion timestamps, media metadata and custody events. Original bytes must be preserved outside the browser prototype in immutable object storage in production.
+
 ## Non-goals
 
 - Do not manufacture or imply actual crash footage when none exists.
 - Do not make automated legal liability determinations.
 - Do not scrape private CCTV or protected data without authorization.
 - Do not market generated 3D scenes as recordings of real events.
-- Do not rely on God’s Eye View public feeds as the sole evidence for a claim.
+- Do not rely on public geospatial feeds as sole evidence for a claim.
 
 ## Core architecture
 
 ```text
 Claim / Evidence Intake
+        ↓
+Immutable Evidence Identity + Hash
         ↓
 Evidence Normalization
         ↓
@@ -62,6 +61,10 @@ Cesium Investigation Cockpit
 Evidence Pack / Investigator Report
 ```
 
+## Pilot API
+
+FastAPI service owns case and evidence registry contracts. Storage is intentionally replaceable in the first pilot so the workflow can be demonstrated without prematurely coupling the product to a particular database or object store.
+
 ## Initial vertical
 
 South African motor insurance claims, starting with disputed road collisions and progressively extending to prior-damage verification, storm/flood property claims and cargo/transport claims.
@@ -72,15 +75,7 @@ Start as investigation-as-a-service for a small batch of disputed claims. Measur
 
 ## Trust requirements
 
-Every conclusion must retain:
-- source identifier
-- acquisition timestamp
-- original-file hash where applicable
-- transformation/processing history
-- model/version identifier where AI is used
-- confidence/data-quality status
-
-Human investigator review remains the final decision point.
+Every conclusion must retain source identifier, acquisition timestamp, original-file hash where applicable, transformation/processing history, model/version identifier where AI is used, and confidence/data-quality status. Human investigator review remains the final decision point.
 
 ## Success metrics
 
@@ -92,13 +87,12 @@ Human investigator review remains the final decision point.
 - cycle time to claim resolution
 - recoverable/disputable amount identified
 
-## Phase 1 build
+## Current build
 
-1. Cesium-based South Africa investigation globe.
-2. Claim intake JSON model.
-3. Synthetic collision case for development/demo.
-4. Timeline panel linked to spatial entities.
-5. Evidence cards with provenance.
-6. Claim A vs Claim B comparison.
-7. Reconstruction disclaimer and confidence indicators.
-8. Clean interfaces ready for later FastAPI ingestion/API integration.
+- Cesium-based South Africa investigation globe
+- deterministic evidence correlation and claim assessment engine
+- provenance-aware evidence register
+- browser evidence intake with SHA-256 hashing
+- immutable evidence-record contract and custody events
+- FastAPI case/evidence service contract
+- autonomous browser and unit acceptance tests
