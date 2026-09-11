@@ -5,91 +5,77 @@ import os
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import (
-    DateTime,
-    Integer,
-    LargeBinary,
-    MetaData,
-    String,
-    Table,
-    Text,
-    create_engine,
-    delete,
-    func,
-    insert,
-    select,
-)
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select
 from sqlalchemy.engine import Connection, Engine
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "claimtrace.sqlite3"
-
 metadata = MetaData()
 
 tenants = Table(
     "tenants", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("name", String(240), nullable=False),
-    __import__("sqlalchemy").Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("name", String(240), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 users = Table(
     "users", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("tenant_id", String(120), nullable=False),
-    __import__("sqlalchemy").Column("email", String(320), nullable=False, unique=True),
-    __import__("sqlalchemy").Column("password_hash", String(256), nullable=False),
-    __import__("sqlalchemy").Column("role", String(40), nullable=False),
-    __import__("sqlalchemy").Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("tenant_id", String(120), nullable=False),
+    Column("email", String(320), nullable=False, unique=True),
+    Column("password_hash", String(256), nullable=False),
+    Column("role", String(40), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 sessions = Table(
     "sessions", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("user_id", String(120), nullable=False),
-    __import__("sqlalchemy").Column("token_hash", String(128), nullable=False, unique=True),
-    __import__("sqlalchemy").Column("expires_at", DateTime(timezone=True), nullable=False),
-    __import__("sqlalchemy").Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("user_id", String(120), nullable=False),
+    Column("token_hash", String(128), nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 cases = Table(
     "cases", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("tenant_id", String(120), nullable=False),
-    __import__("sqlalchemy").Column("title", String(240), nullable=False),
-    __import__("sqlalchemy").Column("incident_at", DateTime(timezone=True)),
-    __import__("sqlalchemy").Column("location_json", Text),
-    __import__("sqlalchemy").Column("status", String(40), nullable=False),
-    __import__("sqlalchemy").Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("tenant_id", String(120), nullable=False),
+    Column("title", String(240), nullable=False),
+    Column("incident_at", DateTime(timezone=True)),
+    Column("location_json", Text),
+    Column("status", String(40), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 evidence = Table(
     "evidence", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("tenant_id", String(120), nullable=False),
-    __import__("sqlalchemy").Column("case_id", String(120), nullable=False),
-    __import__("sqlalchemy").Column("type", String(40), nullable=False),
-    __import__("sqlalchemy").Column("source", String(120), nullable=False),
-    __import__("sqlalchemy").Column("source_ref", String(500)),
-    __import__("sqlalchemy").Column("artifact_key", String(700)),
-    __import__("sqlalchemy").Column("artifact_bytes", LargeBinary),
-    __import__("sqlalchemy").Column("sha256", String(64), nullable=False),
-    __import__("sqlalchemy").Column("captured_at", DateTime(timezone=True)),
-    __import__("sqlalchemy").Column("ingested_at", DateTime(timezone=True), nullable=False),
-    __import__("sqlalchemy").Column("media_type", String(120)),
-    __import__("sqlalchemy").Column("size_bytes", Integer),
-    __import__("sqlalchemy").Column("chain_of_custody_json", Text, nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("tenant_id", String(120), nullable=False),
+    Column("case_id", String(120), nullable=False),
+    Column("type", String(40), nullable=False),
+    Column("source", String(120), nullable=False),
+    Column("source_ref", String(500)),
+    Column("artifact_key", String(700)),
+    Column("artifact_bytes", LargeBinary),
+    Column("sha256", String(64), nullable=False),
+    Column("captured_at", DateTime(timezone=True)),
+    Column("ingested_at", DateTime(timezone=True), nullable=False),
+    Column("media_type", String(120)),
+    Column("size_bytes", Integer),
+    Column("chain_of_custody_json", Text, nullable=False),
 )
 
 audit_events = Table(
     "audit_events", metadata,
-    __import__("sqlalchemy").Column("id", String(120), primary_key=True),
-    __import__("sqlalchemy").Column("tenant_id", String(120)),
-    __import__("sqlalchemy").Column("actor_user_id", String(120)),
-    __import__("sqlalchemy").Column("action", String(120), nullable=False),
-    __import__("sqlalchemy").Column("resource_type", String(80)),
-    __import__("sqlalchemy").Column("resource_id", String(160)),
-    __import__("sqlalchemy").Column("metadata_json", Text),
-    __import__("sqlalchemy").Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("id", String(120), primary_key=True),
+    Column("tenant_id", String(120)),
+    Column("actor_user_id", String(120)),
+    Column("action", String(120), nullable=False),
+    Column("resource_type", String(80)),
+    Column("resource_id", String(160)),
+    Column("metadata_json", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 
@@ -161,7 +147,7 @@ def insert_session(session: dict[str, Any]) -> None:
         connection.execute(insert(sessions).values(**session))
 
 
-def get_session_by_hash(token_hash: str, now_value) -> dict[str, Any] | None:
+def get_session_by_hash(token_hash: str, now_value: Any) -> dict[str, Any] | None:
     with connect() as connection:
         row = connection.execute(
             select(sessions, users.c.tenant_id, users.c.email, users.c.role)
@@ -191,13 +177,13 @@ def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | Non
     result = dict(row)
     result["location"] = json.loads(result.pop("location_json")) if result.get("location_json") else None
     result["evidence_count"] = int(count)
+    result.pop("tenant_id", None)
     return result
 
 
 def insert_evidence(record: dict[str, Any]) -> None:
     values = dict(record)
     values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
-    values.pop("artifact_path", None)
     with engine().begin() as connection:
         connection.execute(insert(evidence).values(**values))
 
@@ -213,11 +199,12 @@ def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, 
         item = dict(row)
         item["chain_of_custody"] = json.loads(item.pop("chain_of_custody_json"))
         item.pop("artifact_bytes", None)
+        item.pop("tenant_id", None)
         result.append(item)
     return result
 
 
-def get_evidence_artifact(tenant_id: str, case_id: str, evidence_id: str) -> tuple[str, bytes, str | None] | None:
+def get_evidence_artifact(tenant_id: str, case_id: str, evidence_id: str) -> tuple[str | None, bytes, str | None] | None:
     with connect() as connection:
         row = connection.execute(
             select(evidence.c.artifact_key, evidence.c.artifact_bytes, evidence.c.media_type)
