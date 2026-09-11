@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { buildCaseAssessment, buildTrajectoryAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
+import { buildCaseAssessment, buildEvidenceQualityAssessment, buildTrajectoryAssessment, correlateEvents, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
+import { evidenceQualityAssessment, trajectoryQualityAssessment } from '../src/evidence/quality.js';
 import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
 import { normalizeTelemetry, enrichTelemetry } from '../src/evidence/geospatial.js';
 import { buildTrajectorySegments, summarizeTrajectory, interpolateTrajectory, interpolatePosition } from '../src/evidence/trajectory.js';
@@ -12,6 +13,7 @@ const apiClient = await readFile(new URL('../src/evidence/api.js', import.meta.u
 const frameCapture = await readFile(new URL('../src/evidence/frame-capture.js', import.meta.url), 'utf8');
 const indexHtml = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const videoSync = await readFile(new URL('../src/evidence/video-sync.js', import.meta.url), 'utf8');
+const qualitySource = await readFile(new URL('../src/evidence/quality.js', import.meta.url), 'utf8');
 const telemetryImport = await readFile(new URL('../backend/app/telemetry_import.py', import.meta.url), 'utf8');
 const telemetryRoutes = await readFile(new URL('../backend/app/telemetry_routes.py', import.meta.url), 'utf8');
 const frameRoutes = await readFile(new URL('../backend/app/frame_routes.py', import.meta.url), 'utf8');
@@ -89,6 +91,8 @@ assert.match(frameCapture, /stopImmediatePropagation/);
 assert.match(indexHtml, /frame-capture\.js/);
 assert.match(videoSync, /buildFrameEvidenceIndex/);
 assert.match(videoSync, /timelineFrameIndex/);
+assert.match(qualitySource, /evidenceQualityAssessment/);
+assert.match(qualitySource, /trajectoryQualityAssessment/);
 assert.match(telemetryImport, /parse_csv/);
 assert.match(telemetryImport, /Telemetry CSV must be UTF-8 encoded/);
 assert.match(telemetryRoutes, /\/v1\/cases\/{case_id}\/telemetry\/import/);
@@ -121,6 +125,15 @@ const evidence = normalizeEvidence([
 ]);
 assert.deepEqual(evidence.map((item) => item.id), ['e1', 'e2']);
 assert.equal(provenanceScore(evidence[1]), 80);
+assert.ok(evidence.every((item) => item.quality.score > 0));
+assert.equal(evidence[0].quality.source, 'GPS');
+
+const qualityWithProvenance = evidenceQualityAssessment({ source: 'CCTV', confidence: 'HIGH', accuracyMeters: 5, sha256: 'abc', sourceRef: 'camera.mp4' });
+const qualityWithoutProvenance = evidenceQualityAssessment({ source: 'STATEMENT', confidence: 'LOW' });
+assert.ok(qualityWithProvenance.score > qualityWithoutProvenance.score);
+assert.equal(qualityWithProvenance.provenancePresent, true);
+assert.equal(qualityWithoutProvenance.provenancePresent, false);
+assert.match(qualityWithProvenance.reasons.join(' '), /source provenance present/);
 
 const correlated = correlateEvents(evidence, 5);
 assert.equal(correlated.length, 1);
@@ -149,6 +162,15 @@ const integratedTrajectory = buildTrajectoryAssessment(trajectoryInput);
 assert.equal(integratedTrajectory.telemetry.length, 3);
 assert.equal(integratedTrajectory.segments.length, 2);
 assert.equal(integratedTrajectory.summary.segmentCount, 2);
+assert.ok(integratedTrajectory.quality.score > 0);
+assert.equal(integratedTrajectory.quality.observedSegments, 2);
+
+const interpolatedAssessment = trajectoryQualityAssessment([
+  ...trajectory,
+  { ...trajectory[0], id: 'INT-1', interpolated: true, quality: 'LOW', confidence: 0.2 },
+]);
+assert.equal(interpolatedAssessment.interpolatedSegments, 1);
+assert.ok(interpolatedAssessment.score < integratedTrajectory.quality.score);
 
 const assessment = buildCaseAssessment({
   evidence: [
@@ -165,6 +187,9 @@ assert.equal(assessment.claims[0].result.status, 'CONFLICTING');
 assert.deepEqual(findMissingEvidence(['GPS', 'DASHCAM'], assessment.evidence), ['DASHCAM']);
 assert.ok(assessment.overallConfidence > 0);
 assert.equal(assessment.trajectory.summary.segmentCount, 2);
+assert.ok(assessment.evidenceQuality.score > 0);
+assert.equal(assessment.evidenceQuality.evidenceCount, 3);
+assert.equal(buildEvidenceQualityAssessment(assessment.evidence).score, assessment.evidenceQuality.score);
 
 const normalizedTelemetry = normalizeTelemetry([
   { id: 'p2', timestamp: '2026-08-18T14:31:05', latitude: -26.2465, longitude: 28.0206, accuracy_m: 6 },
@@ -225,4 +250,4 @@ assert.equal(reviewed.chainOfCustody.length, 2);
 assert.notEqual(reviewed.id, undefined);
 assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
 
-console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + live telemetry + synchronized video artifact + persisted frame extraction + raw telemetry import + provenance + migration checks');
+console.log('PASS: ClaimTrace static + source-backed quality + evidence engine + intake + multi-case + live telemetry + synchronized video artifact + persisted frame extraction + raw telemetry import + provenance + migration checks');
