@@ -163,10 +163,19 @@ def evidence_hash_exists(sha256: str) -> bool:
     return row is not None
 
 
-def write_original(case_id: str, evidence_id: str, filename: str, content: bytes) -> Path:
+def write_original(case_id: str, evidence_id: str, filename: str, content: bytes) -> str:
     root = storage_root() / case_id
     root.mkdir(parents=True, exist_ok=True)
     safe_name = Path(filename or "evidence.bin").name or "evidence.bin"
-    destination = root / f"{evidence_id}-{safe_name}"
+    relative_key = Path(case_id) / f"{evidence_id}-{safe_name}"
+    destination = storage_root() / relative_key
     destination.write_bytes(content)
-    return destination
+    return relative_key.as_posix()
+
+
+def read_original(artifact_key: str) -> bytes:
+    root = storage_root().resolve()
+    destination = (root / artifact_key).resolve()
+    if root != destination and root not in destination.parents:
+        raise ValueError("artifact key resolves outside the storage root")
+    return destination.read_bytes()
