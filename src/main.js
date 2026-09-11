@@ -53,6 +53,7 @@ app.innerHTML = `
     <section class="content-grid">
       <section class="map-card">
         <div id="cesiumContainer" class="map"></div>
+        <div id="mapStatus" class="map-status" hidden></div>
         <div class="map-hud top-left">
           <div class="hud-title">RECONSTRUCTION VIEW</div>
           <div class="hud-sub">Johannesburg · South Africa</div>
@@ -92,92 +93,6 @@ app.innerHTML = `
   </main>
 `;
 
-const viewer = new Cesium.Viewer('cesiumContainer', {
-  animation: false,
-  timeline: false,
-  baseLayerPicker: false,
-  geocoder: false,
-  homeButton: false,
-  sceneModePicker: false,
-  navigationHelpButton: false,
-  fullscreenButton: false,
-  selectionIndicator: false,
-  infoBox: false,
-  terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-  imageryProvider: new Cesium.OpenStreetMapImageryProvider({
-    url: 'https://tile.openstreetmap.org/'
-  }),
-});
-
-viewer.scene.globe.enableLighting = false;
-viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#07121f');
-viewer.scene.skyAtmosphere.show = true;
-viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#132333');
-
-const toCartesian = (lon, lat, height = 8) => Cesium.Cartesian3.fromDegrees(lon, lat, height);
-
-const impact = toCartesian(INCIDENT.location.lon, INCIDENT.location.lat, 12);
-
-viewer.entities.add({
-  id: 'incident',
-  name: 'Estimated impact point',
-  position: impact,
-  point: { pixelSize: 14, color: Cesium.Color.fromCssColorString('#ff735c'), outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
-  label: {
-    text: 'EST. IMPACT',
-    font: '12px monospace',
-    fillColor: Cesium.Color.WHITE,
-    showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#101923').withAlpha(0.88),
-    pixelOffset: new Cesium.Cartesian2(0, -26),
-  },
-});
-
-const a = [
-  [28.0147, -26.2410],
-  [28.0168, -26.2420],
-  [28.0188, -26.2432],
-  [28.0205, -26.2466],
-];
-
-const b = [
-  [28.0246, -26.2490],
-  [28.0230, -26.2483],
-  [28.0216, -26.2474],
-  [28.0205, -26.2466],
-];
-
-const addTrajectory = (id, points, color) => {
-  viewer.entities.add({
-    id,
-    polyline: {
-      positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)),
-      width: 5,
-      material: new Cesium.PolylineGlowMaterialProperty({
-        glowPower: 0.15,
-        color: Cesium.Color.fromCssColorString(color),
-      }),
-      clampToGround: false,
-    },
-  });
-};
-
-addTrajectory('vehicle-a', a, '#4ab4ff');
-addTrajectory('vehicle-b', b, '#ffbe5c');
-
-[a[0], b[0]].forEach(([lon, lat], i) => {
-  viewer.entities.add({
-    id: `vehicle-${i}`,
-    position: toCartesian(lon, lat, 10),
-    point: { pixelSize: 9, color: Cesium.Color.fromCssColorString(i === 0 ? '#4ab4ff' : '#ffbe5c') },
-    label: { text: i === 0 ? 'VEHICLE A' : 'VEHICLE B', font: '11px monospace', fillColor: Cesium.Color.WHITE, showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.65), pixelOffset: new Cesium.Cartesian2(12, 0) },
-  });
-});
-
-const scenePoints = [a, b].flat().map(([lon, lat]) => Cesium.Cartographic.fromDegrees(lon, lat));
-const rect = Cesium.Rectangle.fromCartographicArray(scenePoints);
-viewer.camera.flyTo({ destination: Cesium.Rectangle.expand(rect, 0.006), duration: 1.6 });
-
 const timelineEl = document.querySelector('#timeline');
 timelineEl.innerHTML = EVIDENCE.map((event, index) => `
   <button class="timeline-event ${index === 3 ? 'selected' : ''}" data-index="${index}">
@@ -199,8 +114,109 @@ document.querySelectorAll('.timeline-event').forEach((el) => {
   });
 });
 
-document.querySelector('#fitScene').addEventListener('click', () => {
-  viewer.camera.flyTo({ destination: Cesium.Rectangle.expand(rect, 0.006), duration: 1.1 });
+const a = [
+  [28.0147, -26.2410],
+  [28.0168, -26.2420],
+  [28.0188, -26.2432],
+  [28.0205, -26.2466],
+];
+
+const b = [
+  [28.0246, -26.2490],
+  [28.0230, -26.2483],
+  [28.0216, -26.2474],
+  [28.0205, -26.2466],
+];
+
+let viewer = null;
+let sceneRectangle = null;
+
+const mapStatus = document.querySelector('#mapStatus');
+const fitSceneButton = document.querySelector('#fitScene');
+
+const showMapFallback = (reason) => {
+  mapStatus.hidden = false;
+  mapStatus.textContent = `MAP LAYER UNAVAILABLE — EVIDENCE WORKSPACE REMAINS ACTIVE${reason ? ` · ${reason}` : ''}`;
+  fitSceneButton.disabled = true;
+};
+
+const toCartesian = (lon, lat, height = 8) => Cesium.Cartesian3.fromDegrees(lon, lat, height);
+
+const addTrajectory = (id, points, color) => {
+  viewer.entities.add({
+    id,
+    polyline: {
+      positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)),
+      width: 5,
+      material: new Cesium.PolylineGlowMaterialProperty({
+        glowPower: 0.15,
+        color: Cesium.Color.fromCssColorString(color),
+      }),
+      clampToGround: false,
+    },
+  });
+};
+
+try {
+  viewer = new Cesium.Viewer('cesiumContainer', {
+    animation: false,
+    timeline: false,
+    baseLayerPicker: false,
+    geocoder: false,
+    homeButton: false,
+    sceneModePicker: false,
+    navigationHelpButton: false,
+    fullscreenButton: false,
+    selectionIndicator: false,
+    infoBox: false,
+    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+    imageryProvider: false,
+  });
+
+  viewer.scene.globe.enableLighting = false;
+  viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#07121f');
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#132333');
+
+  const impact = toCartesian(INCIDENT.location.lon, INCIDENT.location.lat, 12);
+  viewer.entities.add({
+    id: 'incident',
+    name: 'Estimated impact point',
+    position: impact,
+    point: { pixelSize: 14, color: Cesium.Color.fromCssColorString('#ff735c'), outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+    label: {
+      text: 'EST. IMPACT',
+      font: '12px monospace',
+      fillColor: Cesium.Color.WHITE,
+      showBackground: true,
+      backgroundColor: Cesium.Color.fromCssColorString('#101923').withAlpha(0.88),
+      pixelOffset: new Cesium.Cartesian2(0, -26),
+    },
+  });
+
+  addTrajectory('vehicle-a', a, '#4ab4ff');
+  addTrajectory('vehicle-b', b, '#ffbe5c');
+
+  [a[0], b[0]].forEach(([lon, lat], i) => {
+    viewer.entities.add({
+      id: `vehicle-${i}`,
+      position: toCartesian(lon, lat, 10),
+      point: { pixelSize: 9, color: Cesium.Color.fromCssColorString(i === 0 ? '#4ab4ff' : '#ffbe5c') },
+      label: { text: i === 0 ? 'VEHICLE A' : 'VEHICLE B', font: '11px monospace', fillColor: Cesium.Color.WHITE, showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.65), pixelOffset: new Cesium.Cartesian2(12, 0) },
+    });
+  });
+
+  const scenePoints = [a, b].flat().map(([lon, lat]) => Cesium.Cartographic.fromDegrees(lon, lat));
+  sceneRectangle = Cesium.Rectangle.fromCartographicArray(scenePoints);
+  viewer.camera.flyTo({ destination: Cesium.Rectangle.expand(sceneRectangle, 0.006), duration: 1.6 });
+} catch (error) {
+  console.error('ClaimTrace map initialization failed:', error);
+  showMapFallback('renderer initialization failed');
+}
+
+fitSceneButton.addEventListener('click', () => {
+  if (!viewer || !sceneRectangle) return;
+  viewer.camera.flyTo({ destination: Cesium.Rectangle.expand(sceneRectangle, 0.006), duration: 1.1 });
 });
 
-window.addEventListener('beforeunload', () => viewer.destroy());
+window.addEventListener('beforeunload', () => viewer?.destroy());
