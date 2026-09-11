@@ -4,9 +4,11 @@ import { buildCaseAssessment, correlateEvents, findMissingEvidence, normalizeEvi
 import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
 
 const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+const apiMode = await readFile(new URL('../src/evidence/api-mode.js', import.meta.url), 'utf8');
+const apiClient = await readFile(new URL('../src/evidence/api.js', import.meta.url), 'utf8');
+const render = await readFile(new URL('../render.yaml', import.meta.url), 'utf8');
 const prd = await readFile(new URL('../PRD.md', import.meta.url), 'utf8');
 
-// Static architecture checks: assert stable implementation anchors, not rendered copy.
 assert.match(source, /const EVIDENCE = \[/);
 assert.match(source, /const CLAIMS = \[/);
 assert.match(source, /id="timeline"/);
@@ -14,6 +16,13 @@ assert.match(source, /id="claims"/);
 assert.match(source, /cesiumContainer/);
 assert.match(source, /fitScene/);
 assert.match(source, /RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE/);
+assert.match(apiMode, /ClaimTrace Investigator Access/);
+assert.match(apiMode, /uploadEvidence\(caseId/);
+assert.match(apiClient, /Authorization/);
+assert.match(apiClient, /\/v1\/auth\/login/);
+assert.match(render, /claimtrace-api/);
+assert.match(render, /claimtrace-web/);
+assert.match(render, /claimtrace-db/);
 assert.match(prd, /ClaimTrace/);
 assert.match(prd, /evidence/);
 assert.match(prd, /human/i);
@@ -70,4 +79,4 @@ assert.equal(reviewed.chainOfCustody.length, 2);
 assert.notEqual(reviewed.id, undefined);
 assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
 
-console.log('PASS: ClaimTrace static + evidence engine + intake checks');
+console.log('PASS: ClaimTrace static + evidence engine + intake + API/deployment checks');
