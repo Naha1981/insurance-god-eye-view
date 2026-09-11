@@ -69,6 +69,26 @@ try {
     true,
   );
 
+  await mkdir(artifactDir, { recursive: true });
+  const fixturePath = `${artifactDir}/intake-fixture.txt`;
+  await writeFile(fixturePath, 'ClaimTrace deterministic intake fixture');
+  const fileInput = await page.$('#evidenceFile');
+  assert.ok(fileInput, 'Evidence file input should exist');
+  await fileInput.uploadFile(fixturePath);
+  await page.waitForFunction(
+    () => document.querySelectorAll('#evidenceRegister .evidence-row').length === 6,
+    { timeout: 5000 },
+  );
+
+  const intakeResult = await page.evaluate(() => ({
+    count: document.querySelectorAll('#evidenceRegister .evidence-row').length,
+    status: document.querySelector('#intakeStatus')?.textContent || '',
+    hashedRow: document.querySelector('#evidenceRegister .evidence-row:last-child .evidence-hash')?.textContent || '',
+  }));
+  assert.equal(intakeResult.count, 6);
+  assert.match(intakeResult.status, /REGISTERED E-/);
+  assert.match(intakeResult.hashedRow, /SHA-256 [a-f0-9]{16}/i);
+
   await page.click('#fitScene');
 
   // A map fallback is an accepted non-fatal condition, but unrelated runtime errors are not.
@@ -81,14 +101,13 @@ try {
   assert.match(visibleText, /SYNTHETIC DEMO|Prototype score from synthetic evidence/i);
   assert.doesNotMatch(visibleText, /ACTUAL CRASH VIDEO|RECORDED CRASH FOOTAGE/i);
 
-  await mkdir(artifactDir, { recursive: true });
   await page.screenshot({ path: `${artifactDir}/claimtrace-smoke.png`, fullPage: true });
   await writeFile(
     `${artifactDir}/claimtrace-summary.json`,
-    JSON.stringify({ status: 'PASS', checks: 13, result, diagnostics }, null, 2),
+    JSON.stringify({ status: 'PASS', checks: 17, result, intakeResult, diagnostics }, null, 2),
   );
 
-  console.log(JSON.stringify({ status: 'PASS', checks: 13, result }, null, 2));
+  console.log(JSON.stringify({ status: 'PASS', checks: 17, result, intakeResult }, null, 2));
 } catch (error) {
   await mkdir(artifactDir, { recursive: true });
   if (page) {
