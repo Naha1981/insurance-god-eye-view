@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from . import auth, report, storage, video
+from .telemetry_routes import router as telemetry_router
 
 SourceType = Literal[
     "DASHCAM", "CCTV", "PHOTO", "POLICE_REPORT", "TELEMATICS", "GPS",
@@ -100,8 +101,11 @@ class CaseCreate(BaseModel):
         return value
 
 
-class Case(CaseCreate):
+class Case(BaseModel):
     id: str
+    title: str
+    incident_at: datetime | None = None
+    location: Location | None = None
     status: Literal["INVESTIGATION", "REVIEW", "CLOSED"] = "INVESTIGATION"
     created_at: datetime
     evidence_count: int = 0
@@ -401,3 +405,6 @@ def list_case_audit(case_id: str, principal: auth.Principal = Depends(auth.get_c
     if storage.get_case(case_id, principal.tenant_id) is None:
         raise HTTPException(status_code=404, detail="Case not found")
     return storage.list_audit_events(principal.tenant_id, case_id)
+
+
+app.include_router(telemetry_router)
