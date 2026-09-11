@@ -38,7 +38,6 @@ try {
 
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-  // The investigation workspace is the critical path; rendering must not depend on Cesium/WebGL.
   await page.waitForSelector('#timeline .timeline-event', { timeout: 5000 });
   await page.waitForSelector('#claims .claim-row', { timeout: 5000 });
 
@@ -91,12 +90,9 @@ try {
 
   await page.click('#fitScene');
 
-  // A map fallback is an accepted non-fatal condition, but unrelated runtime errors are not.
-  const unexpectedConsoleErrors = diagnostics.consoleErrors.filter((message) => !message.includes('ClaimTrace map initialization failed:'));
-  assert.deepEqual(unexpectedConsoleErrors, []);
+  assert.deepEqual(diagnostics.consoleErrors, []);
   assert.deepEqual(diagnostics.pageErrors, []);
 
-  // Autonomous acceptance checks: reject obvious hallucination-risk copy in a visual reconstruction.
   const visibleText = await page.$eval('body', (el) => el.innerText);
   assert.match(visibleText, /SYNTHETIC DEMO|Prototype score from synthetic evidence/i);
   assert.doesNotMatch(visibleText, /ACTUAL CRASH VIDEO|RECORDED CRASH FOOTAGE/i);
