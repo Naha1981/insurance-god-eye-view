@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect
 
 from app import storage
 from app.auth import hash_password
@@ -30,6 +31,15 @@ def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_database_initialization_records_alembic_revision(configured_env):
+    with storage.connect() as connection:
+        tables = set(inspect(connection).get_table_names())
+        assert "video_metadata" in tables
+        assert "alembic_version" in tables
+        revision = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+    assert revision == "0001_claimtrace_baseline"
 
 
 def test_case_and_evidence_lifecycle(client):
@@ -87,6 +97,11 @@ def test_video_metadata_is_tenant_scoped_and_linked_to_video_evidence(client):
     fetched = client.get(f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata")
     assert fetched.status_code == 200
     assert fetched.json()["height"] == 1080
+    duplicate = client.post(
+        f"/v1/cases/{case_id}/evidence/{evidence['id']}/video-metadata",
+        json={"duration_seconds": 91.25},
+    )
+    assert duplicate.status_code == 409
 
     photo = client.post(
         f"/v1/cases/{case_id}/evidence",
@@ -97,6 +112,25 @@ def test_video_metadata_is_tenant_scoped_and_linked_to_video_evidence(client):
         json={"duration_seconds": 3},
     )
     assert rejected.status_code == 422
+
+
+def test_naive_evidence_capture_time_is_rejected(client):
+    case_id = client.post("/v1/cases", json={"title": "Timestamp case"}).json()["id"]
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence",
+        json={"type": "PHOTO", "source": "INSURED", "sha256": "e" * 64, "captured_at": "2026-08-18T12:31:50"},
+    )
+    assert response.status_code == 422
+
+
+def test_naive_upload_capture_time_is_rejected(client):
+    case_id = client.post("/v1/cases", json={"title": "Upload timestamp case"}).json()["id"]
+    response = client.post(
+        f"/v1/cases/{case_id}/evidence/upload",
+        data={"type": "PHOTO", "captured_at": "2026-08-18T12:31:50"},
+        files={"file": ("scene.txt", b"fixture", "text/plain")},
+    )
+    assert response.status_code == 422
 
 
 def test_investigator_report_is_downloadable(client):
