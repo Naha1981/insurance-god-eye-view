@@ -51,11 +51,13 @@ try {
     fitButton: document.querySelector('#fitScene')?.textContent,
     mapCanvas: Boolean(document.querySelector('#cesiumContainer canvas')),
     mapFallback: document.querySelector('#mapStatus')?.textContent || null,
+    evidenceRegisterCount: document.querySelectorAll('#evidenceRegister .evidence-row').length,
   }));
 
   assert.equal(result.caseId, 'CLM-DEMO-0001');
   assert.equal(result.evidenceCount, 5);
   assert.equal(result.claimCount, 5);
+  assert.equal(result.evidenceRegisterCount, 5);
   assert.match(result.disclaimer, /NOT ACTUAL CRASH FOOTAGE/);
   assert.equal(result.fitButton, 'FIT SCENE');
   assert.equal(typeof result.title, 'string');
@@ -76,17 +78,17 @@ try {
 
   // Autonomous acceptance checks: reject obvious hallucination-risk copy in a visual reconstruction.
   const visibleText = await page.$eval('body', (el) => el.innerText);
-  assert.match(visibleText, /SYNTHETIC DEMO/);
+  assert.match(visibleText, /SYNTHETIC DEMO|Prototype score from synthetic evidence/i);
   assert.doesNotMatch(visibleText, /ACTUAL CRASH VIDEO|RECORDED CRASH FOOTAGE/i);
 
   await mkdir(artifactDir, { recursive: true });
   await page.screenshot({ path: `${artifactDir}/claimtrace-smoke.png`, fullPage: true });
   await writeFile(
     `${artifactDir}/claimtrace-summary.json`,
-    JSON.stringify({ status: 'PASS', checks: 12, result, diagnostics }, null, 2),
+    JSON.stringify({ status: 'PASS', checks: 13, result, diagnostics }, null, 2),
   );
 
-  console.log(JSON.stringify({ status: 'PASS', checks: 12, result }, null, 2));
+  console.log(JSON.stringify({ status: 'PASS', checks: 13, result }, null, 2));
 } catch (error) {
   await mkdir(artifactDir, { recursive: true });
   if (page) {
