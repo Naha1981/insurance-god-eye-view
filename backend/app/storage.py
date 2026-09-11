@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import Column, DateTime, Float, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select
 from sqlalchemy.engine import Connection, Engine
 
@@ -40,8 +42,16 @@ def database_url() -> str:
 def engine() -> Engine: return create_engine(database_url(), future=True, pool_pre_ping=True)
 def connect() -> Connection: return engine().connect()
 
+
+def _alembic_config() -> Config:
+    config = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    config.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
+    return config
+
+
 def init_database() -> None:
-    db_engine = engine(); metadata.create_all(db_engine); db_engine.dispose()
+    command.upgrade(_alembic_config(), "head")
+
 
 def reset_database() -> None:
     db_engine = engine()
@@ -89,7 +99,6 @@ def list_cases(tenant_id: str, status: str | None = None, limit: int = 50, offse
         counts = connection.execute(select(evidence.c.case_id, func.count().label("count")).where(evidence.c.tenant_id == tenant_id).group_by(evidence.c.case_id)).all()
     count_map = {row.case_id: row.count for row in counts}
     return [_case_result(row, count_map.get(row.id, 0)) for row in rows]
-
 def insert_evidence(record: dict[str, Any]) -> None:
     values = dict(record); values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
     with engine().begin() as connection: connection.execute(insert(evidence).values(**values))
