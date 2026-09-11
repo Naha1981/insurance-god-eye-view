@@ -22,15 +22,19 @@
 - [x] Evidence hashing and immutable provenance-record contract
 - [x] Browser evidence intake for pilot/demo workflow
 - [x] Server-side SHA-256 verification and duplicate detection
-- [x] Persistent SQLite pilot case/evidence registry
-- [x] Server-side multipart evidence upload with local original-byte storage
+- [x] Database-backed pilot case/evidence registry
+- [x] Server-side multipart evidence upload with persisted original bytes for pilot deployments
 - [x] Frontend API adapter for case/evidence operations
+- [x] Authenticated API session support
+- [x] Tenant-scoped case/evidence access
+- [x] Audit events for authentication, case creation and evidence access
+- [x] Render backend/static-site deployment blueprint
 - [ ] Dashcam/video metadata intake
 - [ ] Photograph EXIF extraction
 - [ ] GPS/telematics CSV/JSON intake
 - [ ] PDF/police-report intake
 - [ ] Weather and road-context adapters
-- [ ] Production immutable object storage
+- [ ] Dedicated immutable object storage for production evidence media
 
 ## Phase 3 — Reconstruction engine
 - [x] Deterministic evidence normalization
@@ -45,14 +49,15 @@
 ## Phase 4 — Commercial pilot
 - [x] Investigator evidence register
 - [x] FastAPI case/evidence service
-- [ ] Investigator case workspace backed by API
+- [x] API-backed investigator workspace mode
 - [ ] Exportable investigation report
 - [ ] Secure case sharing
-- [ ] Audit log
-- [ ] Tenant isolation
+- [x] Audit log
+- [x] Tenant isolation
 - [ ] POPIA/privacy review
-- [ ] Production immutable object storage
+- [ ] Dedicated immutable object storage
 - [ ] Pilot dataset and acceptance criteria
+- [ ] Production deployment verification on Render
 
 ## Phase 5 — Insurance platform
 - [ ] Claims-system API
@@ -71,4 +76,7 @@
 - Every material finding must be traceable to source evidence or clearly marked as an inference.
 - Prefer deterministic rules before probabilistic AI for evidence calculations.
 - Keep the investigation workspace functional when WebGL/Cesium is unavailable.
+- Never expose filesystem paths or secrets to browser clients.
+- Authenticate API access in deployed mode and scope all case/evidence queries to a tenant.
+- Treat Postgres-stored evidence bytes as pilot storage only; production media belongs in dedicated immutable object storage.
 - Do not mark a feature complete until code exists and CI exercises it.
