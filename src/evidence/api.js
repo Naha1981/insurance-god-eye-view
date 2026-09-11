@@ -36,6 +36,7 @@ export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeUR
 export const registerVideoMetadata = (caseId, evidenceId, metadata) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) });
 export const getVideoMetadata = (caseId, evidenceId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`);
 export const createFrameReference = (caseId, evidenceId, payload) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/frame-reference`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+export const listFrameArtifacts = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/frame-artifacts`);
 
 export const importTelemetryCsv = async (caseId, { file, sourceTimezone = 'Africa/Johannesburg', source = 'GPS_UPLOAD' }) => {
   if (!file) throw new Error('Telemetry CSV file is required');
@@ -44,6 +45,16 @@ export const importTelemetryCsv = async (caseId, { file, sourceTimezone = 'Afric
   form.set('source', source);
   form.set('file', file, file.name || 'telemetry.csv');
   return request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry/import`, { method: 'POST', body: form });
+};
+
+export const createFrameArtifact = async (caseId, { evidenceId, frameIndex, timestamp, blob }) => {
+  if (!blob) throw new Error('Frame image is required');
+  const form = new FormData();
+  form.set('evidence_id', evidenceId);
+  form.set('frame_index', String(frameIndex));
+  form.set('timestamp_utc', new Date(timestamp).toISOString());
+  form.set('file', blob, `frame-${frameIndex}.png`);
+  return request(`/v1/cases/${encodeURIComponent(caseId)}/frame-artifacts`, { method: 'POST', body: form });
 };
 
 export const getEvidenceArtifact = async (caseId, evidenceId) => {
