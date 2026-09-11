@@ -54,8 +54,8 @@
 - [~] Authenticated dashcam/CCTV playback with capture-clock synchronization and derived frame reference UI — implemented, CI verification pending
 - [~] Persist synchronized frame references in the case audit trail — implemented, CI verification pending
 - [~] Deterministic browser frame extraction to PNG with SHA-256 and persisted derived frame artifact — implemented, CI verification pending
+- [x] Deterministic source-backed evidence quality assessment integrated into the case engine — CI verification pending
 - [ ] Video server-side frame extraction / thumbnail generation
-- [ ] Confidence/data-quality model backed by source evidence
 
 ## Phase 4 — Commercial pilot
 - [x] Investigator evidence register
