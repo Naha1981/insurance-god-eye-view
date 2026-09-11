@@ -50,7 +50,8 @@
 - [x] Investigator evidence register
 - [x] FastAPI case/evidence service
 - [x] API-backed investigator workspace mode
-- [ ] Exportable investigation report
+- [x] Tenant-scoped case listing and case switching
+- [x] Exportable investigator HTML report
 - [ ] Secure case sharing
 - [x] Audit log
 - [x] Tenant isolation
