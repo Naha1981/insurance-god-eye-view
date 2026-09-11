@@ -21,6 +21,10 @@
 ## Phase 2 — Real evidence ingestion
 - [x] Evidence hashing and immutable provenance-record contract
 - [x] Browser evidence intake for pilot/demo workflow
+- [x] Server-side SHA-256 verification and duplicate detection
+- [x] Persistent SQLite pilot case/evidence registry
+- [x] Server-side multipart evidence upload with local original-byte storage
+- [x] Frontend API adapter for case/evidence operations
 - [ ] Dashcam/video metadata intake
 - [ ] Photograph EXIF extraction
 - [ ] GPS/telematics CSV/JSON intake
