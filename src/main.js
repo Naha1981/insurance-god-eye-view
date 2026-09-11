@@ -63,6 +63,7 @@ app.innerHTML = `
           <div class="legend-row"><span class="legend-line a"></span> Vehicle A trajectory</div>
           <div class="legend-row"><span class="legend-line b"></span> Vehicle B trajectory</div>
           <div class="legend-row"><span class="legend-point"></span> Estimated impact point</div>
+          <div id="liveTelemetryLegend" class="legend-row" hidden><span class="legend-line live"></span> Persisted telemetry</div>
         </div>
         <div class="reconstruction-stamp">RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE</div>
       </section>
@@ -84,6 +85,8 @@ app.innerHTML = `
           <div class="section-kicker">CLAIM VERSION TEST</div>
           <div id="claims" class="claims"></div>
         </div>
+
+        <div class="panel-block" id="telemetryPanel" hidden></div>
 
         <div class="panel-block">
           <div class="section-head"><div><div class="section-kicker">EVIDENCE REGISTER</div><h2>Provenance chain</h2></div><span class="mini-chip" id="evidenceCountChip">${EVIDENCE.length} ITEMS</span></div>
@@ -211,6 +214,7 @@ const b = [
 
 let viewer = null;
 let sceneRectangle = null;
+let liveTelemetryEntities = [];
 
 const mapStatus = document.querySelector('#mapStatus');
 const fitSceneButton = document.querySelector('#fitScene');
@@ -237,6 +241,66 @@ const addTrajectory = (id, points, color) => {
     },
   });
 };
+
+const clearLiveTelemetry = () => {
+  if (!viewer) return;
+  liveTelemetryEntities.forEach((entity) => viewer.entities.remove(entity));
+  liveTelemetryEntities = [];
+  const legend = document.querySelector('#liveTelemetryLegend');
+  if (legend) legend.hidden = true;
+};
+
+const renderLiveTelemetry = ({ points = [], segments = [] } = {}) => {
+  if (!viewer || !points.length) return false;
+  clearLiveTelemetry();
+  const byVehicle = new Map();
+  points.forEach((point) => {
+    const key = point.vehicle_id ?? point.vehicleId ?? 'UNASSIGNED';
+    if (!byVehicle.has(key)) byVehicle.set(key, []);
+    byVehicle.get(key).push(point);
+  });
+  const palette = ['#5be58f', '#c084fc', '#ffbe5c', '#4ab4ff'];
+  let vehicleIndex = 0;
+  byVehicle.forEach((vehiclePoints, vehicleId) => {
+    const color = palette[vehicleIndex % palette.length];
+    const positions = vehiclePoints.map((point) => toCartesian(point.lon, point.lat, 16));
+    const entity = viewer.entities.add({
+      id: `live-telemetry-${vehicleIndex}`,
+      name: `Persisted telemetry · ${vehicleId}`,
+      polyline: {
+        positions,
+        width: 7,
+        material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.05, color: Cesium.Color.fromCssColorString(color) }),
+        clampToGround: false,
+      },
+    });
+    liveTelemetryEntities.push(entity);
+    const first = vehiclePoints[0];
+    const last = vehiclePoints.at(-1);
+    [first, last].forEach((point, index) => {
+      const marker = viewer.entities.add({
+        position: toCartesian(point.lon, point.lat, 18),
+        point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(color), outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+        label: { text: `${vehicleId} ${index === 0 ? 'START' : 'END'}`, font: '10px monospace', fillColor: Cesium.Color.WHITE, showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.65), pixelOffset: new Cesium.Cartesian2(10, 0) },
+      });
+      liveTelemetryEntities.push(marker);
+    });
+    vehicleIndex += 1;
+  });
+
+  const lowQuality = segments.filter((segment) => segment.quality === 'LOW').length;
+  const telemetryLegend = document.querySelector('#liveTelemetryLegend');
+  if (telemetryLegend) telemetryLegend.hidden = false;
+  const status = document.querySelector('#mapStatus');
+  if (status) {
+    status.hidden = false;
+    status.textContent = `${points.length} persisted telemetry points rendered · ${segments.length} trajectory segments · ${lowQuality} low-quality segments`;
+  }
+  return true;
+};
+
+window.claimtraceRenderTelemetry = renderLiveTelemetry;
+window.claimtraceClearTelemetry = clearLiveTelemetry;
 
 try {
   viewer = new Cesium.Viewer('cesiumContainer', {
