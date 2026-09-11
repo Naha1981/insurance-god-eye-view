@@ -8,9 +8,11 @@ import {
   isApiConfigured,
   listCases,
   listEvidence,
+  listTelemetry,
   login,
   uploadEvidence,
 } from './api.js';
+import { buildTrajectoryAssessment } from './engine.js';
 
 const CASE_KEY = 'claimtrace_case_id';
 
@@ -37,6 +39,12 @@ style.textContent = `
   .case-row small { color: #88a1b7; }
   .case-row .case-count { color: #8ff0b4; white-space: nowrap; font: 11px ui-monospace, monospace; }
   .case-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .telemetry-panel { border-color: rgba(91,229,143,.2); }
+  .telemetry-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .telemetry-metric { padding: 10px; border: 1px solid #20384d; background: #081522; }
+  .telemetry-metric span { display: block; color: #7e97ad; font: 10px ui-monospace, monospace; text-transform: uppercase; }
+  .telemetry-metric strong { display: block; margin-top: 4px; color: #f4f8fb; font-size: 15px; }
+  .telemetry-quality { margin-top: 10px; color: #9fbed4; font-size: 11px; line-height: 1.45; }
 `;
 document.head.appendChild(style);
 
@@ -126,6 +134,39 @@ const renderApiEvidence = (records) => {
 
   const heading = document.querySelector('#timeline')?.previousElementSibling?.querySelector('h2');
   if (heading) heading.textContent = `${records.length} evidence events`;
+};
+
+const renderTelemetryPanel = (points) => {
+  const panel = document.querySelector('#telemetryPanel');
+  if (!panel) return null;
+  const raw = points.map((point) => ({
+    ...point,
+    timestamp: point.timestamp_utc,
+    lat: point.lat,
+    lon: point.lon,
+    accuracyMeters: point.accuracy_meters,
+    vehicleId: point.vehicle_id,
+    speedKph: point.speed_kph,
+    headingDeg: point.heading_deg,
+  }));
+  const assessment = buildTrajectoryAssessment(raw);
+  const summary = assessment.summary;
+  const avgAccuracy = points.length ? points.reduce((sum, point) => sum + (Number(point.accuracy_meters) || 0), 0) / points.length : null;
+  const confidence = assessment.segments.length
+    ? Math.round((assessment.segments.reduce((sum, segment) => sum + segment.confidence, 0) / assessment.segments.length) * 100)
+    : 0;
+  panel.hidden = false;
+  panel.className = 'panel-block telemetry-panel';
+  panel.innerHTML = `
+    <div class="section-head"><div><div class="section-kicker">LIVE RECONSTRUCTION INPUT</div><h2>${points.length} telemetry points</h2></div><span class="mini-chip">PERSISTED</span></div>
+    <div class="telemetry-grid">
+      <div class="telemetry-metric"><span>Distance</span><strong>${summary.totalDistanceMeters.toFixed(0)} m</strong></div>
+      <div class="telemetry-metric"><span>Mean speed</span><strong>${summary.meanSpeedKph == null ? '—' : `${summary.meanSpeedKph.toFixed(1)} km/h`}</strong></div>
+      <div class="telemetry-metric"><span>Signal quality</span><strong>${confidence}%</strong></div>
+    </div>
+    <div class="telemetry-quality">${summary.segmentCount} observed trajectory segments · ${summary.lowConfidenceSegments} low-confidence segments · average reported accuracy ${avgAccuracy == null ? 'unknown' : `${avgAccuracy.toFixed(1)} m`}. Movement shown on the map is evidence reconstruction, not recorded crash footage.</div>
+  `;
+  return assessment;
 };
 
 const installApiIntake = (caseId) => {
@@ -313,6 +354,22 @@ const enableApiMode = async () => {
     installApiIntake(selectedCase.id);
     installReportAction(selectedCase.id);
     renderApiEvidence(await listEvidence(selectedCase.id));
+
+    try {
+      const telemetry = await listTelemetry(selectedCase.id);
+      const assessment = renderTelemetryPanel(telemetry);
+      if (assessment && typeof window.claimtraceRenderTelemetry === 'function') {
+        window.claimtraceRenderTelemetry({ points: telemetry, segments: assessment.segments });
+      }
+    } catch (telemetryError) {
+      const panel = document.querySelector('#telemetryPanel');
+      if (panel) {
+        panel.hidden = false;
+        panel.className = 'panel-block telemetry-panel';
+        panel.innerHTML = '<div class="section-kicker">LIVE RECONSTRUCTION INPUT</div><div class="telemetry-quality">No persisted telemetry available for this case yet.</div>';
+      }
+      window.claimtraceClearTelemetry?.();
+    }
   };
 
   await refreshCase(caseRecord);
