@@ -6,16 +6,18 @@ on:
   pull_request:
     branches: [main]
 
-# Never cancel a verification run simply because another commit arrived.
-# Forensic software benefits more from completed evidence than from replacing it.
+# A newer verification run supersedes an older one. This prevents stale browser
+# smoke tests from exhausting the Actions concurrency/runners and blocking the
+# current evidence-producing commit indefinitely.
 concurrency:
   group: claimtrace-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +59,7 @@ jobs:
   windows-smoke:
     name: Windows browser smoke
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,6 +90,7 @@ jobs:
   backend-test:
     name: FastAPI backend tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
