@@ -71,3 +71,16 @@ export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 
     body: form,
   });
 };
+
+export const downloadReport = async (caseId) => {
+  if (!API_BASE) throw new Error('ClaimTrace API is not configured');
+  const headers = { Accept: 'text/html' };
+  const token = getStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/report`, { headers });
+  if (!response.ok) throw new Error(`Report generation failed (${response.status})`);
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get('Content-Disposition') || '';
+  const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  return { blob, filename: filenameMatch?.[1] || `claimtrace-${caseId}-report.html` };
+};
