@@ -1,15 +1,24 @@
 const API_BASE = String(import.meta.env.VITE_CLAIMTRACE_API_BASE ?? '').replace(/\/$/, '');
+const TOKEN_KEY = 'claimtrace_access_token';
 
 export const isApiConfigured = () => Boolean(API_BASE);
+export const getConfiguredApiBase = () => API_BASE;
+export const getStoredToken = () => sessionStorage.getItem(TOKEN_KEY);
+export const clearStoredToken = () => sessionStorage.removeItem(TOKEN_KEY);
+
+export const setStoredToken = (token) => sessionStorage.setItem(TOKEN_KEY, token);
 
 const request = async (path, options = {}) => {
   if (!API_BASE) throw new Error('ClaimTrace API is not configured');
+  const headers = {
+    Accept: 'application/json',
+    ...(options.headers ?? {}),
+  };
+  const token = getStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      Accept: 'application/json',
-      ...(options.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -20,11 +29,25 @@ const request = async (path, options = {}) => {
     } catch {
       // Keep the HTTP status when the server did not return JSON.
     }
-    throw new Error(detail);
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
   }
 
-  return response.json();
+  return response.status === 204 ? null : response.json();
 };
+
+export const login = async (email, password) => {
+  const body = await request('/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  setStoredToken(body.access_token);
+  return body;
+};
+
+export const getMe = () => request('/v1/auth/me');
 
 export const createCase = (payload) => request('/v1/cases', {
   method: 'POST',
@@ -48,5 +71,3 @@ export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 
     body: form,
   });
 };
-
-export const getConfiguredApiBase = () => API_BASE;
