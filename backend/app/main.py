@@ -12,52 +12,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from . import auth, report, storage
+from . import auth, report, storage, telemetry
 
 SourceType = Literal[
     "DASHCAM", "CCTV", "PHOTO", "POLICE_REPORT", "TELEMATICS", "GPS",
     "EDR", "STATEMENT", "OTHER",
 ]
-
 MAX_UPLOAD_BYTES = int(os.getenv("CLAIMTRACE_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
-
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    storage.init_database()
-    auth.ensure_bootstrap_user()
-    yield
+    storage.init_database(); auth.ensure_bootstrap_user(); yield
 
-
-app = FastAPI(
-    title="ClaimTrace Evidence API",
-    version="0.5.0",
-    description="Authenticated tenant-scoped case and evidence registry for physical-world claim investigations.",
-    lifespan=lifespan,
-)
-
+app = FastAPI(title="ClaimTrace Evidence API", version="0.6.0", description="Authenticated tenant-scoped case and evidence registry for physical-world claim investigations.", lifespan=lifespan)
 cors_origins = [item.strip() for item in os.getenv("CLAIMTRACE_CORS_ORIGINS", "*").split(",") if item.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type", "Accept"])
 
 class CustodyEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     action: str = Field(min_length=1)
     timestamp: datetime
     actor: str = Field(min_length=1)
     note: str | None = None
 
-
 class EvidenceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     type: SourceType
     source: str = Field(min_length=1, max_length=120)
     source_ref: str | None = Field(default=None, max_length=500)
@@ -66,7 +45,6 @@ class EvidenceCreate(BaseModel):
     media_type: str | None = Field(default=None, max_length=120)
     size_bytes: int | None = Field(default=None, ge=0)
 
-
 class Evidence(EvidenceCreate):
     id: str
     case_id: str
@@ -74,35 +52,35 @@ class Evidence(EvidenceCreate):
     ingested_at: datetime
     chain_of_custody: list[CustodyEvent]
 
-
 class Location(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
 
-
 class CaseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     title: str = Field(min_length=1, max_length=240)
     incident_at: datetime | None = None
     location: Location | None = None
-
     @field_validator("incident_at")
     @classmethod
     def incident_time_is_timezone_aware(cls, value: datetime | None) -> datetime | None:
-        if value is not None and value.tzinfo is None:
-            raise ValueError("incident_at must include a timezone")
+        if value is not None and value.tzinfo is None: raise ValueError("incident_at must include a timezone")
         return value
 
-
-class Case(CaseCreate):
+class Case(BaseModel):
     id: str
+    title: str
+    incident_at: datetime | None = None
+    location: Location | None = None
     status: Literal["INVESTIGATION", "REVIEW", "CLOSED"] = "INVESTIGATION"
     created_at: datetime
     evidence_count: int = 0
 
+class TelemetryIngest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    points: list[dict] = Field(min_length=1, max_length=10000)
+    source_timezone: str = "Africa/Johannesburg"
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -110,54 +88,27 @@ class LoginResponse(BaseModel):
     expires_in_hours: int
     user: auth.Principal
 
-
-def now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def normalize_case(case: dict) -> Case:
-    return Case.model_validate(case)
-
-
+def now() -> datetime: return datetime.now(timezone.utc)
+def normalize_case(case: dict) -> Case: return Case.model_validate(case)
 def normalize_evidence(record: dict) -> Evidence:
     data = dict(record)
-    if "artifact_key" in data:
-        data["artifact_path"] = data.pop("artifact_key")
+    if "artifact_key" in data: data["artifact_path"] = data.pop("artifact_key")
     return Evidence.model_validate(data)
-
-
 def audit(principal: auth.Principal, action: str, resource_type: str | None = None, resource_id: str | None = None, metadata: dict | None = None) -> None:
-    storage.insert_audit_event({
-        "id": f"AUD-{uuid4()}",
-        "tenant_id": principal.tenant_id,
-        "actor_user_id": principal.user_id,
-        "action": action,
-        "resource_type": resource_type,
-        "resource_id": resource_id,
-        "metadata": metadata,
-        "created_at": now(),
-    })
-
+    storage.insert_audit_event({"id": f"AUD-{uuid4()}", "tenant_id": principal.tenant_id, "actor_user_id": principal.user_id, "action": action, "resource_type": resource_type, "resource_id": resource_id, "metadata": metadata, "created_at": now()})
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.5.0"}
-
+def health() -> dict[str, str]: return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.6.0"}
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
 def login(payload: auth.LoginRequest) -> LoginResponse:
     result = auth.authenticate(payload.email, payload.password)
-    if result is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    principal, token = result
-    audit(principal, "AUTH_LOGIN", "USER", principal.user_id)
+    if result is None: raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    principal, token = result; audit(principal, "AUTH_LOGIN", "USER", principal.user_id)
     return LoginResponse(access_token=token, expires_in_hours=auth.SESSION_HOURS, user=principal)
 
-
 @app.get("/v1/auth/me", response_model=auth.Principal)
-def me(principal: auth.Principal = Depends(auth.get_current_principal)) -> auth.Principal:
-    return principal
-
+def me(principal: auth.Principal = Depends(auth.get_current_principal)) -> auth.Principal: return principal
 
 @app.get("/v1/cases", response_model=list[Case])
 def list_cases(principal: auth.Principal = Depends(auth.get_current_principal)) -> list[Case]:
@@ -165,181 +116,76 @@ def list_cases(principal: auth.Principal = Depends(auth.get_current_principal)) 
     audit(principal, "CASES_LISTED", "TENANT", principal.tenant_id, {"count": len(cases)})
     return cases
 
-
 @app.post("/v1/cases", response_model=Case, status_code=status.HTTP_201_CREATED)
 def create_case(payload: CaseCreate, principal: auth.Principal = Depends(auth.get_current_principal)) -> Case:
-    created_at = now()
     case_id = f"CLM-{uuid4()}"
-    case_data = {
-        "id": case_id,
-        "tenant_id": principal.tenant_id,
-        "title": payload.title,
-        "incident_at": payload.incident_at,
-        "location_json": payload.location.model_dump_json() if payload.location else None,
-        "status": "INVESTIGATION",
-        "created_at": created_at,
-    }
-    storage.insert_case(case_data)
-    case = normalize_case(storage.get_case(case_id, principal.tenant_id))
-    audit(principal, "CASE_CREATED", "CASE", case_id, {"title": payload.title})
-    return case
-
+    storage.insert_case({"id": case_id, "tenant_id": principal.tenant_id, "title": payload.title, "incident_at": payload.incident_at, "location_json": payload.location.model_dump_json() if payload.location else None, "status": "INVESTIGATION", "created_at": now()})
+    case = normalize_case(storage.get_case(case_id, principal.tenant_id)); audit(principal, "CASE_CREATED", "CASE", case_id, {"title": payload.title}); return case
 
 @app.get("/v1/cases/{case_id}", response_model=Case)
 def get_case(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> Case:
     case = storage.get_case(case_id, principal.tenant_id)
-    if case is None:
-        raise HTTPException(status_code=404, detail="Case not found")
+    if case is None: raise HTTPException(status_code=404, detail="Case not found")
     return normalize_case(case)
 
+@app.post("/v1/cases/{case_id}/telemetry", status_code=status.HTTP_201_CREATED)
+def ingest_telemetry(case_id: str, payload: TelemetryIngest, principal: auth.Principal = Depends(auth.get_current_principal)) -> dict:
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
+    normalized = telemetry.normalize_points(payload.points, payload.source_timezone)
+    if not normalized: raise HTTPException(status_code=422, detail="No valid telemetry points could be normalized")
+    enriched = telemetry.enrich_points(normalized)
+    created_at = now()
+    rows = [{**item, "tenant_id": principal.tenant_id, "case_id": case_id, "created_at": created_at} for item in enriched]
+    storage.insert_telemetry_points(rows)
+    audit(principal, "TELEMETRY_INGESTED", "CASE", case_id, {"input_points": len(payload.points), "accepted_points": len(rows), "source_timezone": payload.source_timezone})
+    return {"case_id": case_id, "accepted_points": len(rows), "rejected_points": len(payload.points) - len(rows), "source_timezone": payload.source_timezone, "points": enriched}
+
+@app.get("/v1/cases/{case_id}/telemetry")
+def list_case_telemetry(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> list[dict]:
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
+    return storage.list_telemetry_points(case_id, principal.tenant_id)
 
 @app.post("/v1/cases/{case_id}/evidence", response_model=Evidence, status_code=status.HTTP_201_CREATED)
 def register_evidence(case_id: str, payload: EvidenceCreate, principal: auth.Principal = Depends(auth.get_current_principal)) -> Evidence:
-    case = storage.get_case(case_id, principal.tenant_id)
-    if case is None:
-        raise HTTPException(status_code=404, detail="Case not found")
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
     normalized_hash = payload.sha256.lower()
-    if storage.evidence_hash_exists(normalized_hash, principal.tenant_id):
-        raise HTTPException(status_code=409, detail="Evidence with this SHA-256 hash is already registered")
-
-    ingested_at = now()
-    evidence_id = f"E-{uuid4()}"
-    custody = [{
-        "action": "INGESTED",
-        "timestamp": ingested_at,
-        "actor": "CLAIMTRACE-API",
-        "note": "Evidence metadata registered without altering the original source artifact.",
-    }]
-    storage.insert_evidence({
-        **payload.model_dump(),
-        "id": evidence_id,
-        "tenant_id": principal.tenant_id,
-        "case_id": case_id,
-        "artifact_key": None,
-        "artifact_bytes": None,
-        "sha256": normalized_hash,
-        "ingested_at": ingested_at,
-        "chain_of_custody": custody,
-    })
-    evidence = normalize_evidence({
-        **payload.model_dump(),
-        "id": evidence_id,
-        "case_id": case_id,
-        "artifact_key": None,
-        "sha256": normalized_hash,
-        "ingested_at": ingested_at,
-        "chain_of_custody": custody,
-    })
-    audit(principal, "EVIDENCE_REGISTERED", "EVIDENCE", evidence_id, {"type": payload.type, "sha256": normalized_hash})
-    return evidence
-
+    if storage.evidence_hash_exists(normalized_hash, principal.tenant_id): raise HTTPException(status_code=409, detail="Evidence with this SHA-256 hash is already registered")
+    ingested_at = now(); evidence_id = f"E-{uuid4()}"; custody = [{"action": "INGESTED", "timestamp": ingested_at, "actor": "CLAIMTRACE-API", "note": "Evidence metadata registered without altering the original source artifact."}]
+    storage.insert_evidence({**payload.model_dump(), "id": evidence_id, "tenant_id": principal.tenant_id, "case_id": case_id, "artifact_key": None, "artifact_bytes": None, "sha256": normalized_hash, "ingested_at": ingested_at, "chain_of_custody": custody})
+    evidence = normalize_evidence({**payload.model_dump(), "id": evidence_id, "case_id": case_id, "artifact_key": None, "sha256": normalized_hash, "ingested_at": ingested_at, "chain_of_custody": custody}); audit(principal, "EVIDENCE_REGISTERED", "EVIDENCE", evidence_id, {"type": payload.type, "sha256": normalized_hash}); return evidence
 
 @app.post("/v1/cases/{case_id}/evidence/upload", response_model=Evidence, status_code=status.HTTP_201_CREATED)
-async def upload_evidence(
-    case_id: str,
-    type: SourceType = Form(...),
-    source: str = Form("USER_UPLOAD"),
-    captured_at: datetime | None = Form(None),
-    claimed_sha256: str | None = Form(None),
-    file: UploadFile = File(...),
-    principal: auth.Principal = Depends(auth.get_current_principal),
-) -> Evidence:
-    case = storage.get_case(case_id, principal.tenant_id)
-    if case is None:
-        raise HTTPException(status_code=404, detail="Case not found")
-
+async def upload_evidence(case_id: str, type: SourceType = Form(...), source: str = Form("USER_UPLOAD"), captured_at: datetime | None = Form(None), claimed_sha256: str | None = Form(None), file: UploadFile = File(...), principal: auth.Principal = Depends(auth.get_current_principal)) -> Evidence:
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
     content = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail=f"Evidence exceeds {MAX_UPLOAD_BYTES} byte upload limit")
-    if not content:
-        raise HTTPException(status_code=400, detail="Evidence file is empty")
-
+    if len(content) > MAX_UPLOAD_BYTES: raise HTTPException(status_code=413, detail=f"Evidence exceeds {MAX_UPLOAD_BYTES} byte upload limit")
+    if not content: raise HTTPException(status_code=400, detail="Evidence file is empty")
     sha256 = hashlib.sha256(content).hexdigest()
-    if claimed_sha256 and claimed_sha256.lower() != sha256:
-        raise HTTPException(status_code=422, detail="claimed_sha256 does not match server-computed SHA-256")
-    if storage.evidence_hash_exists(sha256, principal.tenant_id):
-        raise HTTPException(status_code=409, detail="Evidence with this SHA-256 hash is already registered")
-
-    evidence_id = f"E-{uuid4()}"
-    safe_filename = os.path.basename(file.filename or "evidence.bin") or "evidence.bin"
-    artifact_key = f"{principal.tenant_id}/{case_id}/{evidence_id}/{safe_filename}"
-    ingested_at = now()
-    custody = [{
-        "action": "INGESTED",
-        "timestamp": ingested_at,
-        "actor": "CLAIMTRACE-API",
-        "note": "Original evidence bytes stored with server-side SHA-256 recorded at intake.",
-    }]
-    storage.insert_evidence({
-        "id": evidence_id,
-        "tenant_id": principal.tenant_id,
-        "case_id": case_id,
-        "type": type,
-        "source": source,
-        "source_ref": safe_filename,
-        "artifact_key": artifact_key,
-        "artifact_bytes": content,
-        "sha256": sha256,
-        "captured_at": captured_at,
-        "ingested_at": ingested_at,
-        "media_type": file.content_type,
-        "size_bytes": len(content),
-        "chain_of_custody": custody,
-    })
-    evidence = normalize_evidence({
-        "id": evidence_id,
-        "case_id": case_id,
-        "type": type,
-        "source": source,
-        "source_ref": safe_filename,
-        "artifact_key": artifact_key,
-        "sha256": sha256,
-        "captured_at": captured_at,
-        "ingested_at": ingested_at,
-        "media_type": file.content_type,
-        "size_bytes": len(content),
-        "chain_of_custody": custody,
-    })
-    audit(principal, "EVIDENCE_UPLOADED", "EVIDENCE", evidence_id, {"type": type, "sha256": sha256, "size_bytes": len(content)})
-    return evidence
-
+    if claimed_sha256 and claimed_sha256.lower() != sha256: raise HTTPException(status_code=422, detail="claimed_sha256 does not match server-computed SHA-256")
+    if storage.evidence_hash_exists(sha256, principal.tenant_id): raise HTTPException(status_code=409, detail="Evidence with this SHA-256 hash is already registered")
+    evidence_id = f"E-{uuid4()}"; safe_filename = os.path.basename(file.filename or "evidence.bin") or "evidence.bin"; artifact_key = f"{principal.tenant_id}/{case_id}/{evidence_id}/{safe_filename}"; ingested_at = now(); custody = [{"action": "INGESTED", "timestamp": ingested_at, "actor": "CLAIMTRACE-API", "note": "Original evidence bytes stored with server-side SHA-256 recorded at intake."}]
+    storage.insert_evidence({"id": evidence_id, "tenant_id": principal.tenant_id, "case_id": case_id, "type": type, "source": source, "source_ref": safe_filename, "artifact_key": artifact_key, "artifact_bytes": content, "sha256": sha256, "captured_at": captured_at, "ingested_at": ingested_at, "media_type": file.content_type, "size_bytes": len(content), "chain_of_custody": custody})
+    evidence = normalize_evidence({"id": evidence_id, "case_id": case_id, "type": type, "source": source, "source_ref": safe_filename, "artifact_key": artifact_key, "sha256": sha256, "captured_at": captured_at, "ingested_at": ingested_at, "media_type": file.content_type, "size_bytes": len(content), "chain_of_custody": custody}); audit(principal, "EVIDENCE_UPLOADED", "EVIDENCE", evidence_id, {"type": type, "sha256": sha256, "size_bytes": len(content)}); return evidence
 
 @app.get("/v1/cases/{case_id}/evidence", response_model=list[Evidence])
 def list_evidence(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> list[Evidence]:
-    if storage.get_case(case_id, principal.tenant_id) is None:
-        raise HTTPException(status_code=404, detail="Case not found")
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
     return [normalize_evidence(item) for item in storage.list_evidence(case_id, principal.tenant_id)]
-
 
 @app.get("/v1/cases/{case_id}/evidence/{evidence_id}/artifact")
 def get_evidence_artifact(case_id: str, evidence_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> Response:
     artifact = storage.get_evidence_artifact(principal.tenant_id, case_id, evidence_id)
-    if artifact is None:
-        raise HTTPException(status_code=404, detail="Evidence artifact not found")
-    _, content, media_type = artifact
-    audit(principal, "EVIDENCE_VIEWED", "EVIDENCE", evidence_id)
-    return Response(content=content, media_type=media_type or "application/octet-stream")
-
+    if artifact is None: raise HTTPException(status_code=404, detail="Evidence artifact not found")
+    _, content, media_type = artifact; audit(principal, "EVIDENCE_VIEWED", "EVIDENCE", evidence_id); return Response(content=content, media_type=media_type or "application/octet-stream")
 
 @app.get("/v1/cases/{case_id}/report")
 def get_case_report(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> Response:
     case = storage.get_case(case_id, principal.tenant_id)
-    if case is None:
-        raise HTTPException(status_code=404, detail="Case not found")
-    evidence = storage.list_evidence(case_id, principal.tenant_id)
-    audit_events = storage.list_audit_events(principal.tenant_id, case_id)
-    payload = report.build_report(case, evidence, audit_events)
-    document = report.render_html(payload)
-    audit(principal, "REPORT_GENERATED", "CASE", case_id, {"evidence_count": len(evidence)})
-    return Response(
-        content=document,
-        media_type="text/html",
-        headers={"Content-Disposition": f'attachment; filename="claimtrace-{case_id}-report.html"'},
-    )
-
+    if case is None: raise HTTPException(status_code=404, detail="Case not found")
+    evidence = storage.list_evidence(case_id, principal.tenant_id); audit_events = storage.list_audit_events(principal.tenant_id, case_id); document = report.render_html(report.build_report(case, evidence, audit_events)); audit(principal, "REPORT_GENERATED", "CASE", case_id, {"evidence_count": len(evidence)})
+    return Response(content=document, media_type="text/html", headers={"Content-Disposition": f'attachment; filename="claimtrace-{case_id}-report.html"'})
 
 @app.get("/v1/cases/{case_id}/audit")
 def list_case_audit(case_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> list[dict]:
-    if storage.get_case(case_id, principal.tenant_id) is None:
-        raise HTTPException(status_code=404, detail="Case not found")
+    if storage.get_case(case_id, principal.tenant_id) is None: raise HTTPException(status_code=404, detail="Case not found")
     return storage.list_audit_events(principal.tenant_id, case_id)
