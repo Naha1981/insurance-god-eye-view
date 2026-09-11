@@ -1,6 +1,5 @@
 import hashlib
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -66,7 +65,7 @@ def test_case_and_evidence_lifecycle():
     assert listed.json()[0]["id"] == evidence["id"]
 
 
-def test_file_upload_hashes_and_persists_original(tmp_path):
+def test_file_upload_hashes_and_persists_original():
     case_id = client.post("/v1/cases", json={"title": "Upload case"}).json()["id"]
     fixture = b"ClaimTrace server-side evidence intake fixture"
     digest = hashlib.sha256(fixture).hexdigest()
@@ -80,11 +79,8 @@ def test_file_upload_hashes_and_persists_original(tmp_path):
     evidence = response.json()
     assert evidence["sha256"] == digest
     assert evidence["size_bytes"] == len(fixture)
-    assert evidence["artifact_path"]
-
-    artifact = Path(evidence["artifact_path"])
-    assert artifact.exists()
-    assert artifact.read_bytes() == fixture
+    assert evidence["artifact_path"] == f"{case_id}/{evidence['id']}-scene.txt"
+    assert storage.read_original(evidence["artifact_path"]) == fixture
 
     duplicate = client.post(
         f"/v1/cases/{case_id}/evidence/upload",
