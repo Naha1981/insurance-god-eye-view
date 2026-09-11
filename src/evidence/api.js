@@ -35,6 +35,7 @@ export const listTelemetryProvenance = (caseId) => request(`/v1/cases/${encodeUR
 export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points }) });
 export const registerVideoMetadata = (caseId, evidenceId, metadata) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) });
 export const getVideoMetadata = (caseId, evidenceId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`);
+export const createFrameReference = (caseId, evidenceId, payload) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/frame-reference`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
 export const importTelemetryCsv = async (caseId, { file, sourceTimezone = 'Africa/Johannesburg', source = 'GPS_UPLOAD' }) => {
   if (!file) throw new Error('Telemetry CSV file is required');
