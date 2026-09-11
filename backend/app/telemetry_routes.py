@@ -149,3 +149,61 @@ def list_telemetry_provenance(case_id: str, principal: auth.Principal = Depends(
     if storage.get_case(case_id, principal.tenant_id) is None:
         raise HTTPException(status_code=404, detail="Case not found")
     return telemetry_provenance.list_case_links(case_id, principal.tenant_id)
+
+
+@router.post("/v1/cases/{case_id}/evidence/{evidence_id}/frame-reference")
+def create_frame_reference(
+    case_id: str,
+    evidence_id: str,
+    payload: dict,
+    principal: auth.Principal = Depends(auth.get_current_principal),
+) -> dict:
+    if storage.get_case(case_id, principal.tenant_id) is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    evidence = next((item for item in storage.list_evidence(case_id, principal.tenant_id) if item["id"] == evidence_id), None)
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    if evidence["type"] not in {"DASHCAM", "CCTV"} or not str(evidence.get("media_type") or "").startswith("video/"):
+        raise HTTPException(status_code=422, detail="Frame references require a DASHCAM or CCTV video evidence artifact")
+
+    try:
+        frame_index = int(payload.get("frame_index"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="frame_index must be a non-negative integer") from exc
+    if frame_index < 0:
+        raise HTTPException(status_code=422, detail="frame_index must be a non-negative integer")
+
+    timestamp_value = payload.get("timestamp")
+    try:
+        timestamp = datetime.fromisoformat(str(timestamp_value).replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="timestamp must be ISO-8601") from exc
+    if timestamp.tzinfo is None:
+        raise HTTPException(status_code=422, detail="timestamp must include a timezone")
+    timestamp = timestamp.astimezone(timezone.utc)
+
+    nearest_id = payload.get("nearest_telemetry_point_id")
+    if nearest_id:
+        telemetry = storage.list_telemetry_points(case_id, principal.tenant_id)
+        if not any(point["id"] == nearest_id for point in telemetry):
+            raise HTTPException(status_code=422, detail="nearest_telemetry_point_id is not part of this case")
+
+    reference_id = f"FRAME-{uuid4()}"
+    created_at = _now()
+    metadata = {
+        "frame_reference_id": reference_id,
+        "frame_index": frame_index,
+        "timestamp_utc": timestamp.isoformat().replace("+00:00", "Z"),
+        "nearest_telemetry_point_id": nearest_id,
+        "note": payload.get("note"),
+    }
+    _audit(principal, "FRAME_REFERENCE_CREATED", case_id, evidence_id, metadata)
+    return {
+        "id": reference_id,
+        "case_id": case_id,
+        "evidence_id": evidence_id,
+        "frame_index": frame_index,
+        "timestamp": metadata["timestamp_utc"],
+        "nearest_telemetry_point_id": nearest_id,
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+    }
