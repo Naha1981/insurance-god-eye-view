@@ -10,6 +10,11 @@ const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8'
 const apiMode = await readFile(new URL('../src/evidence/api-mode.js', import.meta.url), 'utf8');
 const apiClient = await readFile(new URL('../src/evidence/api.js', import.meta.url), 'utf8');
 const videoSync = await readFile(new URL('../src/evidence/video-sync.js', import.meta.url), 'utf8');
+const migrationConfig = await readFile(new URL('../backend/alembic.ini', import.meta.url), 'utf8');
+const migrationEnv = await readFile(new URL('../backend/alembic/env.py', import.meta.url), 'utf8');
+const baselineMigration = await readFile(new URL('../backend/alembic/versions/0001_claimtrace_baseline.py', import.meta.url), 'utf8');
+const migrationReadme = await readFile(new URL('../backend/alembic/README.md', import.meta.url), 'utf8');
+const backendRequirements = await readFile(new URL('../backend/requirements.txt', import.meta.url), 'utf8');
 const render = await readFile(new URL('../render.yaml', import.meta.url), 'utf8');
 const prd = await readFile(new URL('../PRD.md', import.meta.url), 'utf8');
 
@@ -41,6 +46,11 @@ assert.match(apiClient, /BROWSER_MEDIA_ELEMENT/);
 assert.match(apiClient, /readBrowserVideoMetadata/);
 assert.match(videoSync, /buildFrameEvidenceIndex/);
 assert.match(videoSync, /timelineFrameIndex/);
+assert.match(migrationConfig, /\[alembic\]/);
+assert.match(migrationEnv, /target_metadata = metadata/);
+assert.match(baselineMigration, /metadata\.create_all/);
+assert.match(migrationReadme, /alembic upgrade head/);
+assert.match(backendRequirements, /alembic==1\.16\.5/);
 assert.match(render, /claimtrace-api/);
 assert.match(render, /claimtrace-web/);
 assert.match(render, /claimtrace-db/);
@@ -158,4 +168,4 @@ assert.equal(reviewed.chainOfCustody.length, 2);
 assert.notEqual(reviewed.id, undefined);
 assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
 
-console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + live telemetry + video synchronization checks');
+console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + live telemetry + video synchronization + migration checks');
