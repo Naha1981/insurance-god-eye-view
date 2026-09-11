@@ -5,11 +5,14 @@ import { buildCaseAssessment, correlateEvents, findMissingEvidence, normalizeEvi
 const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
 const prd = await readFile(new URL('../PRD.md', import.meta.url), 'utf8');
 
-assert.match(source, /RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE/);
-assert.match(source, /EVIDENCE TIMELINE/);
-assert.match(source, /CLAIM VERSION TEST/);
+// Static architecture checks: assert stable implementation anchors, not rendered copy.
+assert.match(source, /const EVIDENCE = \[/);
+assert.match(source, /const CLAIMS = \[/);
+assert.match(source, /id="timeline"/);
+assert.match(source, /id="claims"/);
 assert.match(source, /cesiumContainer/);
 assert.match(source, /fitScene/);
+assert.match(source, /RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE/);
 assert.match(prd, /ClaimTrace/);
 assert.match(prd, /evidence/);
 assert.match(prd, /human/i);
