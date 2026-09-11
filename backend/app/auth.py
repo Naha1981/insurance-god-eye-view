@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import Depends, Header, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from . import storage
 
@@ -19,8 +19,13 @@ PBKDF2_ITERATIONS = 310_000
 class Principal(BaseModel):
     user_id: str
     tenant_id: str
-    email: EmailStr
+    email: str
     role: str
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=200)
 
 
 def auth_required() -> bool:
