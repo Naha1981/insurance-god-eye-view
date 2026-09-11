@@ -60,9 +60,9 @@ app.innerHTML = `
           <div class="hud-sub">Johannesburg · South Africa</div>
         </div>
         <div class="map-hud bottom-left">
-          <div class="legend-row"><span class="legend-line a"></span> Vehicle A trajectory</div>
-          <div class="legend-row"><span class="legend-line b"></span> Vehicle B trajectory</div>
-          <div class="legend-row"><span class="legend-point"></span> Estimated impact point</div>
+          <div id="syntheticLegendVehicleA" class="legend-row"><span class="legend-line a"></span> Synthetic Vehicle A trajectory</div>
+          <div id="syntheticLegendVehicleB" class="legend-row"><span class="legend-line b"></span> Synthetic Vehicle B trajectory</div>
+          <div id="syntheticLegendImpact" class="legend-row"><span class="legend-point"></span> Synthetic estimated impact point</div>
           <div id="liveTelemetryLegend" class="legend-row" hidden><span class="legend-line live"></span> Persisted telemetry</div>
         </div>
         <div class="reconstruction-stamp">RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE</div>
@@ -215,6 +215,8 @@ const b = [
 let viewer = null;
 let sceneRectangle = null;
 let liveTelemetryEntities = [];
+let syntheticSceneEntities = [];
+let syntheticSceneVisible = true;
 
 const mapStatus = document.querySelector('#mapStatus');
 const fitSceneButton = document.querySelector('#fitScene');
@@ -227,20 +229,39 @@ const showMapFallback = (reason) => {
 
 const toCartesian = (lon, lat, height = 8) => Cesium.Cartesian3.fromDegrees(lon, lat, height);
 
-const addTrajectory = (id, points, color) => {
-  viewer.entities.add({
-    id,
-    polyline: {
-      positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)),
-      width: 5,
-      material: new Cesium.PolylineGlowMaterialProperty({
-        glowPower: 0.15,
-        color: Cesium.Color.fromCssColorString(color),
-      }),
-      clampToGround: false,
-    },
+const addSyntheticEntity = (entity) => {
+  if (entity) syntheticSceneEntities.push(entity);
+  return entity;
+};
+
+const setSyntheticSceneVisibility = (visible) => {
+  syntheticSceneVisible = Boolean(visible);
+  syntheticSceneEntities.forEach((entity) => {
+    entity.show = syntheticSceneVisible;
+  });
+  const labels = [
+    ['syntheticLegendVehicleA', syntheticSceneVisible],
+    ['syntheticLegendVehicleB', syntheticSceneVisible],
+    ['syntheticLegendImpact', syntheticSceneVisible],
+  ];
+  labels.forEach(([id, show]) => {
+    const element = document.querySelector(`#${id}`);
+    if (element) element.hidden = !show;
   });
 };
+
+const addTrajectory = (id, points, color) => addSyntheticEntity(viewer.entities.add({
+  id,
+  polyline: {
+    positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)),
+    width: 5,
+    material: new Cesium.PolylineGlowMaterialProperty({
+      glowPower: 0.15,
+      color: Cesium.Color.fromCssColorString(color),
+    }),
+    clampToGround: false,
+  },
+}));
 
 const clearLiveTelemetry = () => {
   if (!viewer) return;
@@ -251,8 +272,14 @@ const clearLiveTelemetry = () => {
 };
 
 const renderLiveTelemetry = ({ points = [], segments = [] } = {}) => {
-  if (!viewer || !points.length) return false;
+  if (!viewer) return false;
+  if (!points.length) {
+    clearLiveTelemetry();
+    setSyntheticSceneVisibility(true);
+    return false;
+  }
   clearLiveTelemetry();
+  setSyntheticSceneVisibility(false);
   const byVehicle = new Map();
   points.forEach((point) => {
     const key = point.vehicle_id ?? point.vehicleId ?? 'UNASSIGNED';
@@ -294,13 +321,14 @@ const renderLiveTelemetry = ({ points = [], segments = [] } = {}) => {
   const status = document.querySelector('#mapStatus');
   if (status) {
     status.hidden = false;
-    status.textContent = `${points.length} persisted telemetry points rendered · ${segments.length} trajectory segments · ${lowQuality} low-quality segments`;
+    status.textContent = `${points.length} persisted telemetry points rendered · ${segments.length} trajectory segments · ${lowQuality} low-quality segments · synthetic reconstruction hidden`;
   }
   return true;
 };
 
 window.claimtraceRenderTelemetry = renderLiveTelemetry;
 window.claimtraceClearTelemetry = clearLiveTelemetry;
+window.claimtraceSetSyntheticVisibility = setSyntheticSceneVisibility;
 
 try {
   viewer = new Cesium.Viewer('cesiumContainer', {
@@ -324,7 +352,7 @@ try {
   viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#132333');
 
   const impact = toCartesian(INCIDENT.location.lon, INCIDENT.location.lat, 12);
-  viewer.entities.add({
+  addSyntheticEntity(viewer.entities.add({
     id: 'incident',
     name: 'Estimated impact point',
     position: impact,
@@ -337,18 +365,18 @@ try {
       backgroundColor: Cesium.Color.fromCssColorString('#101923').withAlpha(0.88),
       pixelOffset: new Cesium.Cartesian2(0, -26),
     },
-  });
+  }));
 
   addTrajectory('vehicle-a', a, '#4ab4ff');
   addTrajectory('vehicle-b', b, '#ffbe5c');
 
   [a[0], b[0]].forEach(([lon, lat], i) => {
-    viewer.entities.add({
+    addSyntheticEntity(viewer.entities.add({
       id: `vehicle-${i}`,
       position: toCartesian(lon, lat, 10),
       point: { pixelSize: 9, color: Cesium.Color.fromCssColorString(i === 0 ? '#4ab4ff' : '#ffbe5c') },
       label: { text: i === 0 ? 'VEHICLE A' : 'VEHICLE B', font: '11px monospace', fillColor: Cesium.Color.WHITE, showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.65), pixelOffset: new Cesium.Cartesian2(12, 0) },
-    });
+    }));
   });
 
   const scenePoints = [a, b].flat().map(([lon, lat]) => Cesium.Cartographic.fromDegrees(lon, lat));
