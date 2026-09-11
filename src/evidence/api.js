@@ -31,9 +31,19 @@ export const createCase = (payload) => request('/v1/cases', { method: 'POST', he
 export const getCase = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}`);
 export const listEvidence = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence`);
 export const listTelemetry = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`);
+export const listTelemetryProvenance = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry/provenance`);
 export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points }) });
 export const registerVideoMetadata = (caseId, evidenceId, metadata) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) });
 export const getVideoMetadata = (caseId, evidenceId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`);
+
+export const importTelemetryCsv = async (caseId, { file, sourceTimezone = 'Africa/Johannesburg', source = 'GPS_UPLOAD' }) => {
+  if (!file) throw new Error('Telemetry CSV file is required');
+  const form = new FormData();
+  form.set('source_timezone', sourceTimezone);
+  form.set('source', source);
+  form.set('file', file, file.name || 'telemetry.csv');
+  return request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry/import`, { method: 'POST', body: form });
+};
 
 const readBrowserVideoMetadata = (file) => new Promise((resolve) => {
   if (!file?.type?.startsWith('video/') || typeof document === 'undefined' || typeof URL === 'undefined') {
