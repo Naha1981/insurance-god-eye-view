@@ -6,9 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Never cancel a verification run simply because another commit arrived.
+# Forensic software benefits more from completed evidence than from replacing it.
 concurrency:
-  group: claimtrace-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: claimtrace-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -27,9 +29,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
@@ -48,8 +51,8 @@ jobs:
           path: test-artifacts/
           if-no-files-found: ignore
 
-      - name: Dependency audit (informational)
-        run: npm audit --omit=dev --audit-level=high || true
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
 
   windows-smoke:
     name: Windows browser smoke
@@ -62,9 +65,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
@@ -99,6 +103,9 @@ jobs:
 
       - name: Install backend dependencies
         run: pip install -r requirements.txt
+
+      - name: Verify migration head
+        run: alembic current && alembic heads
 
       - name: Run backend tests
         run: pytest -q
