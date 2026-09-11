@@ -102,6 +102,24 @@ def test_file_upload_hashes_persists_and_serves_original(client):
     assert duplicate.status_code == 409
 
 
+def test_investigator_report_is_downloadable(client):
+    case = client.post(
+        "/v1/cases",
+        json={
+            "title": "Reportable collision",
+            "incident_at": datetime(2026, 8, 18, 12, 31, 50, tzinfo=timezone.utc).isoformat(),
+            "location": {"lat": -26.2466, "lon": 28.0205},
+        },
+    ).json()
+    report = client.get(f"/v1/cases/{case['id']}/report")
+    assert report.status_code == 200
+    assert report.headers["content-type"].startswith("text/html")
+    assert "attachment" in report.headers["content-disposition"]
+    assert case["id"] in report.text
+    assert "INVESTIGATOR REVIEW REQUIRED" in report.text
+    assert "does not determine legal liability" in report.text
+
+
 def test_invalid_hash_is_rejected(client):
     case_id = client.post("/v1/cases", json={"title": "Hash validation case"}).json()["id"]
     invalid = client.post(
