@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from . import auth, report, storage
+from . import auth, report, storage, video
 
 SourceType = Literal[
     "DASHCAM", "CCTV", "PHOTO", "POLICE_REPORT", "TELEMATICS", "GPS",
@@ -31,8 +31,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="ClaimTrace Evidence API",
-    version="0.6.0",
-    description="Authenticated tenant-scoped case, evidence and telemetry registry for physical-world claim investigations.",
+    version="0.7.0",
+    description="Authenticated tenant-scoped case, evidence, telemetry and video metadata registry for physical-world claim investigations.",
     lifespan=lifespan,
 )
 
@@ -135,6 +135,24 @@ class TelemetryBatch(BaseModel):
     points: list[TelemetryPointCreate] = Field(min_length=1, max_length=10000)
 
 
+class VideoMetadataIngest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    duration_seconds: float | None = Field(default=None, ge=0)
+    width: int | None = Field(default=None, ge=1)
+    height: int | None = Field(default=None, ge=1)
+    frame_rate: float | None = Field(default=None, gt=0)
+    capture_start_at: datetime | None = None
+    metadata_source: str = Field(default="BROWSER_MEDIA_ELEMENT", min_length=1, max_length=80)
+    metadata_version: str = Field(default="1", min_length=1, max_length=40)
+
+    @field_validator("capture_start_at")
+    @classmethod
+    def capture_start_is_timezone_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("capture_start_at must include a timezone")
+        return value
+
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
@@ -178,7 +196,7 @@ def audit(principal: auth.Principal, action: str, resource_type: str | None = No
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.6.0"}
+    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.7.0"}
 
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
@@ -307,6 +325,34 @@ async def upload_evidence(case_id: str, type: SourceType = Form(...), source: st
     evidence = normalize_evidence({"id": evidence_id, "case_id": case_id, "type": type, "source": source, "source_ref": safe_filename, "artifact_key": artifact_key, "sha256": sha256, "captured_at": captured_at, "ingested_at": ingested_at, "media_type": file.content_type, "size_bytes": len(content), "chain_of_custody": custody})
     audit(principal, "EVIDENCE_UPLOADED", "EVIDENCE", evidence_id, {"type": type, "sha256": sha256, "size_bytes": len(content)})
     return evidence
+
+
+@app.post("/v1/cases/{case_id}/evidence/{evidence_id}/video-metadata")
+def register_video_metadata(case_id: str, evidence_id: str, payload: VideoMetadataIngest, principal: auth.Principal = Depends(auth.get_current_principal)) -> dict:
+    if storage.get_case(case_id, principal.tenant_id) is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    evidence_record = next((item for item in storage.list_evidence(case_id, principal.tenant_id) if item["id"] == evidence_id), None)
+    if evidence_record is None:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    media_type = str(evidence_record.get("media_type") or "")
+    if evidence_record["type"] not in {"DASHCAM", "CCTV"} or not media_type.startswith("video/"):
+        raise HTTPException(status_code=422, detail="Video metadata requires a DASHCAM or CCTV video evidence artifact")
+    normalized = video.normalize_video_metadata(payload.model_dump())
+    row = {"id": f"VID-{uuid4()}", "tenant_id": principal.tenant_id, "case_id": case_id, "evidence_id": evidence_id, **normalized, "created_at": now()}
+    storage.insert_video_metadata(row)
+    audit(principal, "VIDEO_METADATA_REGISTERED", "EVIDENCE", evidence_id, {"duration_seconds": normalized["duration_seconds"], "width": normalized["width"], "height": normalized["height"], "metadata_source": normalized["metadata_source"]})
+    return row
+
+
+@app.get("/v1/cases/{case_id}/evidence/{evidence_id}/video-metadata")
+def get_video_metadata(case_id: str, evidence_id: str, principal: auth.Principal = Depends(auth.get_current_principal)) -> dict:
+    if storage.get_case(case_id, principal.tenant_id) is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    result = storage.get_video_metadata(evidence_id, principal.tenant_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Video metadata not found")
+    result.pop("tenant_id", None)
+    return result
 
 
 @app.get("/v1/cases/{case_id}/evidence", response_model=list[Evidence])
