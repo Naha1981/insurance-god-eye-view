@@ -45,7 +45,7 @@ services:
   - type: web
     name: claimtrace-web
     runtime: static
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_CLAIMTRACE_API_BASE
