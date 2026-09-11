@@ -1,3 +1,6 @@
+import { normalizeTelemetry } from './geospatial.js';
+import { buildTrajectorySegments, summarizeTrajectory } from './trajectory.js';
+
 const SOURCE_PRIORITY = {
   EDR: 100,
   TELEMATICS: 90,
@@ -84,18 +87,29 @@ export const findMissingEvidence = (requiredTypes, evidence) => {
   return requiredTypes.filter((type) => !available.has(String(type).toUpperCase()));
 };
 
-export const buildCaseAssessment = ({ evidence = [], claims = [], requiredEvidence = [] }) => {
+export const buildTrajectoryAssessment = (telemetryPoints, options = {}) => {
+  const normalizedTelemetry = normalizeTelemetry(telemetryPoints, options);
+  return {
+    telemetry: normalizedTelemetry,
+    segments: buildTrajectorySegments(normalizedTelemetry, options),
+    summary: summarizeTrajectory(normalizedTelemetry, options),
+  };
+};
+
+export const buildCaseAssessment = ({ evidence = [], claims = [], requiredEvidence = [], telemetry = [] }) => {
   const normalized = normalizeEvidence(evidence);
   const correlations = correlateEvents(normalized);
   const assessments = claims.map((claim) => ({
     claim,
     result: evaluateClaim(claim, normalized),
   }));
+  const trajectory = telemetry.length ? buildTrajectoryAssessment(telemetry) : null;
 
   return {
     evidence: normalized,
     correlations,
     claims: assessments,
+    trajectory,
     missingEvidence: findMissingEvidence(requiredEvidence, normalized),
     overallConfidence: normalized.length
       ? Math.round(normalized.reduce((sum, item) => sum + provenanceScore(item), 0) / normalized.length)
