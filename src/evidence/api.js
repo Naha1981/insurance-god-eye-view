@@ -32,6 +32,8 @@ export const getCase = (caseId) => request(`/v1/cases/${encodeURIComponent(caseI
 export const listEvidence = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence`);
 export const listTelemetry = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`);
 export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points }) });
+export const registerVideoMetadata = (caseId, evidenceId, metadata) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) });
+export const getVideoMetadata = (caseId, evidenceId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`);
 
 export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 'USER_UPLOAD', claimedSha256 = null }) => {
   const form = new FormData(); form.set('type', type); form.set('source', source); if (capturedAt) form.set('captured_at', capturedAt); if (claimedSha256) form.set('claimed_sha256', claimedSha256); form.set('file', file, file.name);
@@ -43,6 +45,6 @@ export const downloadReport = async (caseId) => {
   const headers = { Accept: 'text/html' }; const token = getStoredToken(); if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/report`, { headers });
   if (!response.ok) throw new Error(`Report generation failed (${response.status})`);
-  const blob = await response.blob(); const contentDisposition = response.headers.get('Content-Disposition') || ''; const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  const blob = await response.blob(); const contentDisposition = response.headers.get('Content-Disposition') || ''; const filenameMatch = contentDisposition.match(/filename=\"([^\"]+)\"/i);
   return { blob, filename: filenameMatch?.[1] || `claimtrace-${caseId}-report.html` };
 };
