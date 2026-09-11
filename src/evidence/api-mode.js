@@ -1,6 +1,7 @@
 import {
   clearStoredToken,
   createCase,
+  createFrameReference,
   downloadReport,
   getCase,
   getEvidenceArtifact,
@@ -16,7 +17,7 @@ import {
   login,
   uploadEvidence,
 } from './api.js';
-import { buildFrameEvidenceIndex, frameTimestamp, normalizeVideoSync } from './video-sync.js';
+import { buildFrameEvidenceIndex, normalizeVideoSync } from './video-sync.js';
 import { buildTrajectoryAssessment } from './engine.js';
 
 const CASE_KEY = 'claimtrace_case_id';
@@ -310,21 +311,31 @@ const renderVideoEvidencePanel = async (caseId, records, telemetry) => {
     video?.addEventListener('loadedmetadata', updateSync);
     if (sync.captureStartAt && sync.frameRate && telemetry.length) {
       frameButton.disabled = false;
-      frameButton.addEventListener('click', () => {
-        const frameIndex = Math.max(0, Math.round(video.currentTime * sync.frameRate));
-        const refs = buildFrameEvidenceIndex(videoRecord.id, sync, [frameIndex]);
-        const reference = refs[0];
-        if (!reference?.timestamp) {
-          frameStatus.textContent = 'FRAME REFERENCE NOT CREATED · synchronized timestamp unavailable';
-          return;
+      frameButton.addEventListener('click', async () => {
+        frameButton.disabled = true;
+        frameStatus.textContent = 'CREATING PERSISTED FRAME REFERENCE…';
+        try {
+          const frameIndex = Math.max(0, Math.round(video.currentTime * sync.frameRate));
+          const refs = buildFrameEvidenceIndex(videoRecord.id, sync, [frameIndex]);
+          const reference = refs[0];
+          if (!reference?.timestamp) throw new Error('synchronized timestamp unavailable');
+          const nearest = telemetry.reduce((best, point) => {
+            if (!best) return point;
+            return Math.abs(new Date(point.timestamp_utc || point.timestamp).getTime() - new Date(reference.timestamp).getTime()) < Math.abs(new Date(best.timestamp_utc || best.timestamp).getTime() - new Date(reference.timestamp).getTime()) ? point : best;
+          }, null);
+          const persisted = await createFrameReference(caseId, videoRecord.id, {
+            frame_index: reference.frameIndex,
+            timestamp: reference.timestamp,
+            nearest_telemetry_point_id: nearest?.id ?? null,
+            note: 'Investigator-created synchronized frame reference from authenticated evidence playback.',
+          });
+          frameStatus.textContent = `PERSISTED FRAME REF · ${persisted.id} · ${videoRecord.id} · FRAME ${reference.frameIndex} · ${reference.timestamp}${nearest ? ` · nearest telemetry ${nearest.id || nearest.vehicle_id || 'POINT'}` : ''}`;
+        } catch (error) {
+          if (error?.status === 401) clearStoredToken();
+          frameStatus.textContent = `FRAME REFERENCE FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
+        } finally {
+          frameButton.disabled = false;
         }
-        const nearest = telemetry.reduce((best, point) => {
-          if (!best) return point;
-          return Math.abs(new Date(point.timestamp_utc || point.timestamp).getTime() - new Date(reference.timestamp).getTime()) < Math.abs(new Date(best.timestamp_utc || best.timestamp).getTime() - new Date(reference.timestamp).getTime()) ? point : best;
-        }, null);
-        frameStatus.textContent = nearest
-          ? `FRAME REF · ${videoRecord.id} · FRAME ${reference.frameIndex} · ${reference.timestamp} · nearest telemetry ${nearest.id || nearest.vehicle_id || 'POINT'}`
-          : `FRAME REF · ${videoRecord.id} · FRAME ${reference.frameIndex} · ${reference.timestamp}`;
       });
     }
   } catch (error) {
