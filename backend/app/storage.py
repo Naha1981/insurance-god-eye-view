@@ -16,6 +16,10 @@ users = Table("users", metadata, Column("id", String(120), primary_key=True), Co
 sessions = Table("sessions", metadata, Column("id", String(120), primary_key=True), Column("user_id", String(120), nullable=False), Column("token_hash", String(128), nullable=False, unique=True), Column("expires_at", DateTime(timezone=True), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
 cases = Table("cases", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("title", String(240), nullable=False), Column("incident_at", DateTime(timezone=True)), Column("location_json", Text), Column("status", String(40), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
 evidence = Table("evidence", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("type", String(40), nullable=False), Column("source", String(120), nullable=False), Column("source_ref", String(500)), Column("artifact_key", String(700)), Column("artifact_bytes", LargeBinary), Column("sha256", String(64), nullable=False), Column("captured_at", DateTime(timezone=True)), Column("ingested_at", DateTime(timezone=True), nullable=False), Column("media_type", String(120)), Column("size_bytes", Integer), Column("chain_of_custody_json", Text, nullable=False))
+video_metadata = Table("video_metadata", metadata,
+    Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("evidence_id", String(120), nullable=False, unique=True),
+    Column("duration_seconds", Float), Column("width", Integer), Column("height", Integer), Column("frame_rate", Float), Column("capture_start_at", DateTime(timezone=True)),
+    Column("metadata_source", String(80), nullable=False), Column("metadata_version", String(40), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
 telemetry_points = Table("telemetry_points", metadata,
     Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False),
     Column("timestamp_utc", DateTime(timezone=True), nullable=False), Column("timestamp_local", String(80), nullable=False), Column("source_timezone", String(80), nullable=False),
@@ -36,17 +40,14 @@ def database_url() -> str:
 def engine() -> Engine: return create_engine(database_url(), future=True, pool_pre_ping=True)
 def connect() -> Connection: return engine().connect()
 
-
 def init_database() -> None:
     db_engine = engine(); metadata.create_all(db_engine); db_engine.dispose()
-
 
 def reset_database() -> None:
     db_engine = engine()
     with db_engine.begin() as connection:
-        for table in (audit_events, telemetry_points, evidence, cases, sessions, users, tenants): connection.execute(delete(table))
+        for table in (audit_events, video_metadata, telemetry_points, evidence, cases, sessions, users, tenants): connection.execute(delete(table))
     db_engine.dispose()
-
 
 def insert_tenant(tenant: dict[str, Any]) -> None:
     with engine().begin() as connection: connection.execute(insert(tenants).values(**tenant))
@@ -68,13 +69,10 @@ def get_session_by_hash(token_hash: str, now_value: Any) -> dict[str, Any] | Non
         row = connection.execute(select(sessions, users.c.tenant_id, users.c.email, users.c.role).join(users, users.c.id == sessions.c.user_id).where(sessions.c.token_hash == token_hash).where(sessions.c.expires_at > now_value)).mappings().first()
     return dict(row) if row else None
 
-
 def insert_case(case: dict[str, Any]) -> None:
     with engine().begin() as connection: connection.execute(insert(cases).values(**case))
-
 def _case_result(row: Any, evidence_count: int) -> dict[str, Any]:
     result = dict(row); location_json = result.pop("location_json", None); result["location"] = json.loads(location_json) if location_json else None; result["evidence_count"] = int(evidence_count); result.pop("tenant_id", None); return result
-
 def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
     statement = select(cases).where(cases.c.id == case_id)
     if tenant_id is not None: statement = statement.where(cases.c.tenant_id == tenant_id)
@@ -83,7 +81,6 @@ def get_case(case_id: str, tenant_id: str | None = None) -> dict[str, Any] | Non
         if not row: return None
         count = connection.execute(select(func.count()).select_from(evidence).where(evidence.c.case_id == case_id)).scalar_one()
     return _case_result(row, count)
-
 def list_cases(tenant_id: str, status: str | None = None, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     statement = select(cases).where(cases.c.tenant_id == tenant_id).order_by(cases.c.created_at.desc()).limit(limit).offset(offset)
     if status: statement = statement.where(cases.c.status == status)
@@ -96,7 +93,6 @@ def list_cases(tenant_id: str, status: str | None = None, limit: int = 50, offse
 def insert_evidence(record: dict[str, Any]) -> None:
     values = dict(record); values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
     with engine().begin() as connection: connection.execute(insert(evidence).values(**values))
-
 def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, Any]]:
     statement = select(evidence).where(evidence.c.case_id == case_id).order_by(evidence.c.ingested_at.asc())
     if tenant_id is not None: statement = statement.where(evidence.c.tenant_id == tenant_id)
@@ -105,31 +101,33 @@ def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, 
     for row in rows:
         item = dict(row); item["chain_of_custody"] = json.loads(item.pop("chain_of_custody_json")); item.pop("artifact_bytes", None); item.pop("tenant_id", None); result.append(item)
     return result
-
 def get_evidence_artifact(tenant_id: str, case_id: str, evidence_id: str) -> tuple[str | None, bytes, str | None] | None:
     with connect() as connection:
         row = connection.execute(select(evidence.c.artifact_key, evidence.c.artifact_bytes, evidence.c.media_type).where(evidence.c.id == evidence_id).where(evidence.c.case_id == case_id).where(evidence.c.tenant_id == tenant_id)).first()
     if not row or row.artifact_bytes is None: return None
     return row.artifact_key, bytes(row.artifact_bytes), row.media_type
-
 def evidence_hash_exists(sha256: str, tenant_id: str | None = None) -> bool:
     statement = select(evidence.c.id).where(evidence.c.sha256 == sha256.lower()).limit(1)
     if tenant_id is not None: statement = statement.where(evidence.c.tenant_id == tenant_id)
     with connect() as connection: return connection.execute(statement).first() is not None
 
+def insert_video_metadata(metadata: dict[str, Any]) -> None:
+    with engine().begin() as connection: connection.execute(insert(video_metadata).values(**metadata))
+def get_video_metadata(evidence_id: str, tenant_id: str) -> dict[str, Any] | None:
+    statement = select(video_metadata).where(video_metadata.c.evidence_id == evidence_id).where(video_metadata.c.tenant_id == tenant_id)
+    with connect() as connection: row = connection.execute(statement).mappings().first()
+    return dict(row) if row else None
+
 def insert_telemetry_points(points: list[dict[str, Any]]) -> None:
     if not points: return
     with engine().begin() as connection: connection.execute(insert(telemetry_points), points)
-
 def list_telemetry_points(case_id: str, tenant_id: str) -> list[dict[str, Any]]:
     statement = select(telemetry_points).where(telemetry_points.c.case_id == case_id, telemetry_points.c.tenant_id == tenant_id).order_by(telemetry_points.c.timestamp_utc.asc())
     with connect() as connection: rows = connection.execute(statement).mappings().all()
     return [dict(row) for row in rows]
-
 def insert_audit_event(event: dict[str, Any]) -> None:
     payload = dict(event); metadata_value = payload.pop("metadata", None); payload["metadata_json"] = json.dumps(metadata_value, separators=(",", ":")) if metadata_value is not None else None
     with engine().begin() as connection: connection.execute(insert(audit_events).values(**payload))
-
 def list_audit_events(tenant_id: str, resource_id: str | None = None) -> list[dict[str, Any]]:
     statement = select(audit_events).where(audit_events.c.tenant_id == tenant_id).order_by(audit_events.c.created_at.desc())
     if resource_id is not None: statement = statement.where(audit_events.c.resource_id == resource_id)
