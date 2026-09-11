@@ -17,9 +17,16 @@ export const normalizeEvidence = (items) => items
     type: String(item.type ?? 'UNKNOWN').toUpperCase(),
     title: item.title ?? 'Untitled evidence',
     detail: item.detail ?? '',
-    source: item.source ?? 'UNKNOWN',
-    confidence: item.confidence ?? 'MEDIUM',
+    source: String(item.source ?? 'UNKNOWN').toUpperCase(),
+    confidence: String(item.confidence ?? 'MEDIUM').toUpperCase(),
     location: item.location ?? null,
+    supportsClaim: item.supportsClaim ?? null,
+    contradictsClaim: item.contradictsClaim ?? null,
+    sourceRef: item.sourceRef ?? null,
+    sha256: item.sha256 ?? null,
+    capturedAt: item.capturedAt ?? item.timestamp ?? null,
+    ingestedAt: item.ingestedAt ?? null,
+    chainOfCustody: item.chainOfCustody ?? null,
   }))
   .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
