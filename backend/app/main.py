@@ -31,7 +31,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="ClaimTrace Evidence API",
-    version="0.4.0",
+    version="0.5.0",
     description="Authenticated tenant-scoped case and evidence registry for physical-world claim investigations.",
     lifespan=lifespan,
 )
@@ -141,7 +141,7 @@ def audit(principal: auth.Principal, action: str, resource_type: str | None = No
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.4.0"}
+    return {"status": "ok", "service": "claimtrace-evidence-api", "version": "0.5.0"}
 
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
@@ -157,6 +157,13 @@ def login(payload: auth.LoginRequest) -> LoginResponse:
 @app.get("/v1/auth/me", response_model=auth.Principal)
 def me(principal: auth.Principal = Depends(auth.get_current_principal)) -> auth.Principal:
     return principal
+
+
+@app.get("/v1/cases", response_model=list[Case])
+def list_cases(principal: auth.Principal = Depends(auth.get_current_principal)) -> list[Case]:
+    cases = [normalize_case(item) for item in storage.list_cases(principal.tenant_id)]
+    audit(principal, "CASES_LISTED", "TENANT", principal.tenant_id, {"count": len(cases)})
+    return cases
 
 
 @app.post("/v1/cases", response_model=Case, status_code=status.HTTP_201_CREATED)
