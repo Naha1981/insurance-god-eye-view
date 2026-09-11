@@ -1,0 +1,62 @@
+# ClaimTrace deployment blueprint
+#
+# Pilot topology:
+#   - claimtrace-web: Vite static frontend on Render CDN
+#   - claimtrace-api: FastAPI web service
+#   - claimtrace-db: Render Postgres
+#
+# The free plans are suitable for validation/demo only. Render's free web service
+# filesystem is ephemeral, so ClaimTrace stores pilot evidence bytes in Postgres.
+# For a real insurer deployment, upgrade compute/database and move original
+# evidence bytes to dedicated immutable object storage.
+
+services:
+  - type: web
+    name: claimtrace-api
+    runtime: python
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: claimtrace-db
+          property: connectionString
+      - key: CLAIMTRACE_AUTH_MODE
+        value: required
+      - key: CLAIMTRACE_SESSION_HOURS
+        value: "12"
+      - key: CLAIMTRACE_CORS_ORIGINS
+        value: "*"
+      - key: CLAIMTRACE_MAX_UPLOAD_BYTES
+        value: "26214400"
+      - key: CLAIMTRACE_BOOTSTRAP_EMAIL
+        sync: false
+      - key: CLAIMTRACE_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: CLAIMTRACE_BOOTSTRAP_TENANT_ID
+        value: TENANT-PILOT
+      - key: CLAIMTRACE_BOOTSTRAP_TENANT_NAME
+        value: ClaimTrace Pilot
+
+  - type: web
+    name: claimtrace-web
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_CLAIMTRACE_API_BASE
+        fromService:
+          name: claimtrace-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+
+databases:
+  - name: claimtrace-db
+    region: frankfurt
+    plan: free
+    databaseName: claimtrace
+    user: claimtrace
