@@ -48,6 +48,7 @@ export const login = async (email, password) => {
 };
 
 export const getMe = () => request('/v1/auth/me');
+export const listCases = () => request('/v1/cases');
 
 export const createCase = (payload) => request('/v1/cases', {
   method: 'POST',
