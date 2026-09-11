@@ -6,6 +6,7 @@ import {
   getMe,
   getStoredToken,
   isApiConfigured,
+  listCases,
   listEvidence,
   login,
   uploadEvidence,
@@ -17,16 +18,25 @@ const style = document.createElement('style');
 style.textContent = `
   .api-mode-banner { margin: 12px 18px 0; padding: 10px 12px; border: 1px solid rgba(74,180,255,.25); background: rgba(15,35,52,.72); color: #b9dfff; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
   .api-auth { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(3,9,15,.86); backdrop-filter: blur(8px); }
-  .api-auth-card { width: min(440px, 100%); padding: 28px; border: 1px solid #27415a; background: #0c1824; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
-  .api-auth-card h2 { margin: 0 0 8px; color: #fff; }
-  .api-auth-card p { margin: 0 0 18px; color: #92a8bd; font-size: 13px; line-height: 1.5; }
-  .api-auth-card label { display: block; margin: 12px 0 6px; color: #9db4ca; font: 11px ui-monospace, monospace; text-transform: uppercase; }
-  .api-auth-card input { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #27415a; background: #07121f; color: #fff; }
-  .api-auth-card button { width: 100%; margin-top: 16px; padding: 11px; border: 0; background: #4ab4ff; color: #05101a; font-weight: 700; cursor: pointer; }
-  .api-auth-error { margin-top: 10px; color: #ff927e; font-size: 12px; }
+  .api-auth-card, .case-switcher-card { width: min(560px, 100%); padding: 28px; border: 1px solid #27415a; background: #0c1824; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+  .api-auth-card h2, .case-switcher-card h2 { margin: 0 0 8px; color: #fff; }
+  .api-auth-card p, .case-switcher-card p { margin: 0 0 18px; color: #92a8bd; font-size: 13px; line-height: 1.5; }
+  .api-auth-card label, .case-switcher-card label { display: block; margin: 12px 0 6px; color: #9db4ca; font: 11px ui-monospace, monospace; text-transform: uppercase; }
+  .api-auth-card input, .case-switcher-card input { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #27415a; background: #07121f; color: #fff; }
+  .api-auth-card button, .case-switcher-card button { width: 100%; margin-top: 16px; padding: 11px; border: 0; background: #4ab4ff; color: #05101a; font-weight: 700; cursor: pointer; }
+  .api-auth-error, .case-switcher-error { margin-top: 10px; color: #ff927e; font-size: 12px; }
   .api-live-chip { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; color: #8ff0b4; }
   .api-live-chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #5be58f; box-shadow: 0 0 8px #5be58f; }
   .api-report-btn { border-color: rgba(74,180,255,.35); color: #d7ecff; }
+  .api-case-btn { border-color: rgba(143,240,180,.28); color: #c8f8d7; }
+  .case-switcher { position: fixed; inset: 0; z-index: 1001; display: grid; place-items: center; padding: 24px; background: rgba(3,9,15,.82); backdrop-filter: blur(10px); }
+  .case-list { display: grid; gap: 8px; max-height: 340px; overflow: auto; }
+  .case-row { width: 100%; display: flex; justify-content: space-between; gap: 16px; padding: 14px; text-align: left; border: 1px solid #27415a; background: #081522; color: #fff; cursor: pointer; }
+  .case-row:hover { border-color: #4ab4ff; background: #0d1f2f; }
+  .case-row strong { display: block; margin-bottom: 4px; }
+  .case-row small { color: #88a1b7; }
+  .case-row .case-count { color: #8ff0b4; white-space: nowrap; font: 11px ui-monospace, monospace; }
+  .case-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 `;
 document.head.appendChild(style);
 
@@ -124,8 +134,12 @@ const installApiIntake = (caseId) => {
   const oldType = document.querySelector('#evidenceType');
   if (!oldButton || !oldInput || !oldType) return;
 
+  document.querySelector('#apiEvidenceType')?.remove();
+  document.querySelector('#apiAddEvidence')?.remove();
+  document.querySelector('#apiEvidenceFile')?.remove();
   oldButton.hidden = true;
   oldInput.hidden = true;
+  oldType.hidden = true;
   oldType.insertAdjacentHTML('afterend', `
     <select id="apiEvidenceType" class="intake-select" aria-label="API evidence type">
       <option>DASHCAM</option>
@@ -138,7 +152,6 @@ const installApiIntake = (caseId) => {
     <button id="apiAddEvidence" class="intake-btn">UPLOAD TO CASE</button>
     <input id="apiEvidenceFile" type="file" hidden />
   `);
-  oldType.hidden = true;
 
   const button = document.querySelector('#apiAddEvidence');
   const input = document.querySelector('#apiEvidenceFile');
@@ -152,8 +165,7 @@ const installApiIntake = (caseId) => {
     status.textContent = `UPLOADING ${file.name}…`;
     try {
       const record = await uploadEvidence(caseId, { file, type: type.value, capturedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null });
-      const records = await listEvidence(caseId);
-      renderApiEvidence(records);
+      renderApiEvidence(await listEvidence(caseId));
       status.textContent = `REGISTERED ${record.id} · SERVER SHA-256 ${record.sha256.slice(0, 16)}…`;
       input.value = '';
     } catch (error) {
@@ -167,7 +179,9 @@ const installApiIntake = (caseId) => {
 
 const installReportAction = (caseId) => {
   const actions = document.querySelector('.top-actions');
-  if (!actions || document.querySelector('#downloadReport')) return;
+  if (!actions) return;
+  const existing = document.querySelector('#downloadReport');
+  if (existing) existing.remove();
   const button = document.createElement('button');
   button.id = 'downloadReport';
   button.className = 'ghost-btn api-report-btn';
@@ -195,6 +209,68 @@ const installReportAction = (caseId) => {
   actions.appendChild(button);
 };
 
+const mountCaseSwitcher = async (refreshCase) => {
+  const overlay = document.createElement('div');
+  overlay.className = 'case-switcher';
+  overlay.innerHTML = `
+    <div class="case-switcher-card">
+      <h2>Investigation cases</h2>
+      <p>Select an existing case or open a new investigation. Cases are tenant-scoped.</p>
+      <div id="claimtraceCaseList" class="case-list"></div>
+      <div class="case-actions">
+        <button id="newCaseButton" type="button">NEW CASE</button>
+        <button id="closeCaseButton" type="button">CLOSE</button>
+      </div>
+      <div id="caseSwitcherError" class="case-switcher-error" aria-live="polite"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const list = overlay.querySelector('#claimtraceCaseList');
+  const error = overlay.querySelector('#caseSwitcherError');
+  try {
+    const cases = await listCases();
+    if (!cases.length) {
+      list.innerHTML = '<div class="small-note">No cases exist in this tenant yet.</div>';
+    } else {
+      list.innerHTML = cases.map((item) => `
+        <button class="case-row" type="button" data-case-id="${esc(item.id)}">
+          <span><strong>${esc(item.title)}</strong><small>${esc(item.id)} · ${esc(item.status)}</small></span>
+          <span class="case-count">${item.evidence_count} evidence</span>
+        </button>
+      `).join('');
+      list.querySelectorAll('.case-row').forEach((row) => {
+        row.addEventListener('click', async () => {
+          const caseId = row.dataset.caseId;
+          try {
+            const caseRecord = await getCase(caseId);
+            sessionStorage.setItem(CASE_KEY, caseRecord.id);
+            overlay.remove();
+            await refreshCase(caseRecord);
+          } catch (switchError) {
+            error.textContent = switchError instanceof Error ? switchError.message : 'Unable to open case';
+          }
+        });
+      });
+    }
+  } catch (listError) {
+    error.textContent = listError instanceof Error ? listError.message : 'Unable to load cases';
+  }
+
+  overlay.querySelector('#newCaseButton').addEventListener('click', async () => {
+    const title = window.prompt('Case title', 'New ClaimTrace investigation');
+    if (!title?.trim()) return;
+    try {
+      const caseRecord = await createCase({ title: title.trim() });
+      sessionStorage.setItem(CASE_KEY, caseRecord.id);
+      overlay.remove();
+      await refreshCase(caseRecord);
+    } catch (createError) {
+      error.textContent = createError instanceof Error ? createError.message : 'Unable to create case';
+    }
+  });
+  overlay.querySelector('#closeCaseButton').addEventListener('click', () => overlay.remove());
+};
+
 const enableApiMode = async () => {
   if (!isApiConfigured()) return;
   await waitForWorkspace();
@@ -209,37 +285,50 @@ const enableApiMode = async () => {
   }
   if (!user) user = await showAuth();
 
+  const cases = await listCases();
   let caseRecord = null;
   const savedCaseId = sessionStorage.getItem(CASE_KEY);
   if (savedCaseId) {
-    try {
-      caseRecord = await getCase(savedCaseId);
-    } catch {
-      sessionStorage.removeItem(CASE_KEY);
-    }
+    try { caseRecord = await getCase(savedCaseId); } catch { sessionStorage.removeItem(CASE_KEY); }
+  }
+  if (!caseRecord && cases.length) {
+    caseRecord = cases[0];
+    sessionStorage.setItem(CASE_KEY, caseRecord.id);
   }
   if (!caseRecord) {
-    caseRecord = await createCase({
-      title: 'ClaimTrace investigation — Johannesburg motor collision',
-      incident_at: new Date('2026-08-18T12:31:50Z').toISOString(),
-      location: { lat: -26.2466, lon: 28.0205 },
-    });
+    caseRecord = await createCase({ title: 'ClaimTrace investigation — Johannesburg motor collision', incident_at: new Date('2026-08-18T12:31:50Z').toISOString(), location: { lat: -26.2466, lon: 28.0205 } });
     sessionStorage.setItem(CASE_KEY, caseRecord.id);
   }
 
-  setBanner(`${user.email} · ${user.tenant_id} · ${caseRecord.id}`);
-  const casePill = document.querySelector('.case-pill');
-  if (casePill) casePill.textContent = caseRecord.id;
-  const title = document.querySelector('.topbar h1');
-  if (title) title.textContent = caseRecord.title;
-  const footerBadge = document.querySelector('.footer-badge');
-  if (footerBadge) footerBadge.textContent = 'API PILOT';
-  const registerNote = document.querySelector('#evidenceRegister')?.parentElement?.querySelector('.small-note');
-  if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion.';
+  const refreshCase = async (selectedCase) => {
+    setBanner(`${user.email} · ${user.tenant_id} · ${selectedCase.id}`);
+    const casePill = document.querySelector('.case-pill');
+    if (casePill) casePill.textContent = selectedCase.id;
+    const title = document.querySelector('.topbar h1');
+    if (title) title.textContent = selectedCase.title;
+    const footerBadge = document.querySelector('.footer-badge');
+    if (footerBadge) footerBadge.textContent = 'API PILOT';
+    const registerNote = document.querySelector('#evidenceRegister')?.parentElement?.querySelector('.small-note');
+    if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion.';
+    installApiIntake(selectedCase.id);
+    installReportAction(selectedCase.id);
+    renderApiEvidence(await listEvidence(selectedCase.id));
+  };
 
-  installApiIntake(caseRecord.id);
-  installReportAction(caseRecord.id);
-  renderApiEvidence(await listEvidence(caseRecord.id));
+  await refreshCase(caseRecord);
+
+  const actions = document.querySelector('.top-actions');
+  if (actions) {
+    const existing = document.querySelector('#caseSwitcherButton');
+    existing?.remove();
+    const button = document.createElement('button');
+    button.id = 'caseSwitcherButton';
+    button.className = 'ghost-btn api-case-btn';
+    button.textContent = 'CASES';
+    button.title = 'Switch investigation case';
+    button.addEventListener('click', () => mountCaseSwitcher(refreshCase));
+    actions.insertBefore(button, actions.firstChild);
+  }
 };
 
 window.addEventListener('load', () => {
