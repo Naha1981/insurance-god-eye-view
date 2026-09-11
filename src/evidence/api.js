@@ -35,9 +35,42 @@ export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeUR
 export const registerVideoMetadata = (caseId, evidenceId, metadata) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) });
 export const getVideoMetadata = (caseId, evidenceId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/video-metadata`);
 
+const readBrowserVideoMetadata = (file) => new Promise((resolve) => {
+  if (!file?.type?.startsWith('video/') || typeof document === 'undefined' || typeof URL === 'undefined') {
+    resolve(null);
+    return;
+  }
+  const video = document.createElement('video');
+  const objectUrl = URL.createObjectURL(file);
+  let settled = false;
+  const finish = (metadata) => {
+    if (settled) return;
+    settled = true;
+    URL.revokeObjectURL(objectUrl);
+    video.removeAttribute('src');
+    video.load();
+    resolve(metadata);
+  };
+  video.preload = 'metadata';
+  video.onloadedmetadata = () => finish({
+    duration_seconds: Number.isFinite(video.duration) && video.duration >= 0 ? video.duration : null,
+    width: video.videoWidth > 0 ? video.videoWidth : null,
+    height: video.videoHeight > 0 ? video.videoHeight : null,
+    metadata_source: 'BROWSER_MEDIA_ELEMENT',
+    metadata_version: '1',
+  });
+  video.onerror = () => finish(null);
+  video.src = objectUrl;
+});
+
 export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 'USER_UPLOAD', claimedSha256 = null }) => {
   const form = new FormData(); form.set('type', type); form.set('source', source); if (capturedAt) form.set('captured_at', capturedAt); if (claimedSha256) form.set('claimed_sha256', claimedSha256); form.set('file', file, file.name);
-  return request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/upload`, { method: 'POST', body: form });
+  const record = await request(`/v1/cases/${encodeURIComponent(caseId)}/evidence/upload`, { method: 'POST', body: form });
+  if ((type === 'DASHCAM' || type === 'CCTV') && file?.type?.startsWith('video/')) {
+    const metadata = await readBrowserVideoMetadata(file);
+    if (metadata) await registerVideoMetadata(caseId, record.id, metadata);
+  }
+  return record;
 };
 
 export const downloadReport = async (caseId) => {
