@@ -8,6 +8,7 @@ const artifactDir = 'test-artifacts';
 const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)], {
   stdio: ['ignore', 'pipe', 'pipe'],
   shell: process.platform === 'win32',
+  detached: process.platform !== 'win32',
 });
 
 let browser;
@@ -24,6 +25,52 @@ const waitForServer = async () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error('Vite server did not become ready within 30 seconds');
+};
+
+const stopServer = async () => {
+  if (!server || server.killed) return;
+  const closePromise = new Promise((resolve) => {
+    if (server.exitCode !== null) {
+      resolve();
+      return;
+    }
+    server.once('close', resolve);
+  });
+
+  try {
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      await new Promise((resolve) => killer.once('close', resolve));
+    } else {
+      try {
+        process.kill(-server.pid, 'SIGTERM');
+      } catch {
+        server.kill('SIGTERM');
+      }
+    }
+  } catch {}
+
+  await Promise.race([
+    closePromise,
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
+
+  if (server.exitCode === null) {
+    try {
+      if (process.platform === 'win32') {
+        const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], {
+          stdio: 'ignore',
+          windowsHide: true,
+        });
+        await new Promise((resolve) => killer.once('close', resolve));
+      } else {
+        process.kill(-server.pid, 'SIGKILL');
+      }
+    } catch {}
+  }
 };
 
 try {
@@ -116,5 +163,5 @@ try {
   throw error;
 } finally {
   if (browser) await browser.close();
-  server.kill('SIGTERM');
+  await stopServer();
 }
