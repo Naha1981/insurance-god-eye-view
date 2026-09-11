@@ -31,7 +31,7 @@ export const createCase = (payload) => request('/v1/cases', { method: 'POST', he
 export const getCase = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}`);
 export const listEvidence = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/evidence`);
 export const listTelemetry = (caseId) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`);
-export const ingestTelemetry = (caseId, points, sourceTimezone = 'Africa/Johannesburg') => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points, source_timezone: sourceTimezone }) });
+export const ingestTelemetry = (caseId, points) => request(`/v1/cases/${encodeURIComponent(caseId)}/telemetry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points }) });
 
 export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 'USER_UPLOAD', claimedSha256 = null }) => {
   const form = new FormData(); form.set('type', type); form.set('source', source); if (capturedAt) form.set('captured_at', capturedAt); if (claimedSha256) form.set('claimed_sha256', claimedSha256); form.set('file', file, file.name);
