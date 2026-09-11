@@ -50,6 +50,7 @@
 - [~] Integrate trajectory assessment into case engine — implemented, CI verification pending
 - [~] Persisted telemetry rendered in Cesium reconstruction scene with investigator quality panel — implemented, CI verification pending
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
+- [~] Capture timestamp integrity hardening — filesystem modification time is no longer asserted as event capture time
 - [ ] Video frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
 
