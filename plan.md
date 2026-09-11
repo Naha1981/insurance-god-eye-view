@@ -40,13 +40,14 @@
 
 ## Phase 4 — Commercial pilot
 - [x] Investigator evidence register
-- [ ] FastAPI case/evidence service
-- [ ] Investigator case workspace
+- [x] FastAPI case/evidence service
+- [ ] Investigator case workspace backed by API
 - [ ] Exportable investigation report
 - [ ] Secure case sharing
 - [ ] Audit log
 - [ ] Tenant isolation
 - [ ] POPIA/privacy review
+- [ ] Production immutable object storage
 - [ ] Pilot dataset and acceptance criteria
 
 ## Phase 5 — Insurance platform
@@ -66,3 +67,4 @@
 - Every material finding must be traceable to source evidence or clearly marked as an inference.
 - Prefer deterministic rules before probabilistic AI for evidence calculations.
 - Keep the investigation workspace functional when WebGL/Cesium is unavailable.
+- Do not mark a feature complete until code exists and CI exercises it.
