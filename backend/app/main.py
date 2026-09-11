@@ -64,6 +64,13 @@ class EvidenceCreate(BaseModel):
     media_type: str | None = Field(default=None, max_length=120)
     size_bytes: int | None = Field(default=None, ge=0)
 
+    @field_validator("captured_at")
+    @classmethod
+    def captured_time_is_timezone_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("captured_at must include a timezone")
+        return value
+
 
 class Evidence(EvidenceCreate):
     id: str
@@ -306,6 +313,8 @@ def register_evidence(case_id: str, payload: EvidenceCreate, principal: auth.Pri
 async def upload_evidence(case_id: str, type: SourceType = Form(...), source: str = Form("USER_UPLOAD"), captured_at: datetime | None = Form(None), claimed_sha256: str | None = Form(None), file: UploadFile = File(...), principal: auth.Principal = Depends(auth.get_current_principal)) -> Evidence:
     if storage.get_case(case_id, principal.tenant_id) is None:
         raise HTTPException(status_code=404, detail="Case not found")
+    if captured_at is not None and captured_at.tzinfo is None:
+        raise HTTPException(status_code=422, detail="captured_at must include a timezone")
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"Evidence exceeds {MAX_UPLOAD_BYTES} byte upload limit")
@@ -337,6 +346,8 @@ def register_video_metadata(case_id: str, evidence_id: str, payload: VideoMetada
     media_type = str(evidence_record.get("media_type") or "")
     if evidence_record["type"] not in {"DASHCAM", "CCTV"} or not media_type.startswith("video/"):
         raise HTTPException(status_code=422, detail="Video metadata requires a DASHCAM or CCTV video evidence artifact")
+    if storage.get_video_metadata(evidence_id, principal.tenant_id) is not None:
+        raise HTTPException(status_code=409, detail="Video metadata is already registered for this evidence")
     normalized = video.normalize_video_metadata(payload.model_dump())
     row = {"id": f"VID-{uuid4()}", "tenant_id": principal.tenant_id, "case_id": case_id, "evidence_id": evidence_id, **normalized, "created_at": now()}
     storage.insert_video_metadata(row)
