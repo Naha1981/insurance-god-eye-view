@@ -32,7 +32,7 @@
 - [~] Dashcam/CCTV video metadata intake — implemented, CI verification pending
 - [ ] Photograph EXIF extraction
 - [~] GPS/telematics JSON ingestion and normalized persistence — implemented, CI verification pending
-- [ ] GPS/telematics CSV intake
+- [~] GPS/telematics CSV intake and raw-file evidence provenance linking — implemented, CI verification pending
 - [ ] PDF/police-report intake
 - [ ] Weather and road-context adapters
 - [ ] Dedicated immutable object storage for production evidence media
@@ -66,7 +66,7 @@
 - [ ] Dedicated immutable object storage
 - [ ] Pilot dataset and acceptance criteria
 - [ ] Production deployment verification on Render
-- [~] Database migration foundation with idempotent baseline — implemented, CI verification pending
+- [~] Database migration foundation with idempotent baseline + telemetry provenance migration — implemented, CI verification pending
 
 ## Phase 5 — Insurance platform
 - [ ] Claims-system API
