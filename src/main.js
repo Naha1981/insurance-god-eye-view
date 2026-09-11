@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './styles.css';
+import { createEvidenceRecord, hashBytes, validateEvidenceRecord } from './evidence/intake.js';
 
 const INCIDENT = {
   id: 'CLM-DEMO-0001',
@@ -85,9 +86,22 @@ app.innerHTML = `
         </div>
 
         <div class="panel-block">
-          <div class="section-head"><div><div class="section-kicker">EVIDENCE REGISTER</div><h2>Provenance chain</h2></div><span class="mini-chip">${EVIDENCE.length} ITEMS</span></div>
+          <div class="section-head"><div><div class="section-kicker">EVIDENCE REGISTER</div><h2>Provenance chain</h2></div><span class="mini-chip" id="evidenceCountChip">${EVIDENCE.length} ITEMS</span></div>
+          <div class="intake-controls">
+            <select id="evidenceType" class="intake-select" aria-label="Evidence type">
+              <option>DASHCAM</option>
+              <option>CCTV</option>
+              <option>PHOTO</option>
+              <option>POLICE_REPORT</option>
+              <option>TELEMATICS</option>
+              <option>OTHER</option>
+            </select>
+            <button id="addEvidence" class="intake-btn">ADD EVIDENCE</button>
+            <input id="evidenceFile" type="file" hidden />
+          </div>
+          <div id="intakeStatus" class="intake-status" aria-live="polite"></div>
           <div id="evidenceRegister" class="evidence-register"></div>
-          <div class="small-note">Production intake will preserve original bytes, hashes, source references and custody events.</div>
+          <div class="small-note">Prototype intake hashes the selected file in-browser and registers metadata. Production intake will retain original bytes in immutable storage.</div>
         </div>
       </aside>
     </section>
@@ -114,18 +128,71 @@ claimsEl.innerHTML = CLAIMS.map(([claim, result]) => `
 `).join('');
 
 const evidenceRegisterEl = document.querySelector('#evidenceRegister');
-evidenceRegisterEl.innerHTML = EVIDENCE.map((event) => `
-  <div class="evidence-row">
-    <div class="evidence-main"><span class="evidence-id">${event.id}</span><strong>${event.type}</strong><span class="evidence-title">${event.title}</span></div>
-    <div class="evidence-meta"><span>${event.source}</span><span>${event.confidence}</span><span class="provenance ${event.provenance.toLowerCase().replaceAll('-', '')}">${event.provenance}</span></div>
-  </div>
-`).join('');
+const evidenceCountChip = document.querySelector('#evidenceCountChip');
+const renderEvidenceRegister = () => {
+  evidenceCountChip.textContent = `${EVIDENCE.length} ITEMS`;
+  evidenceRegisterEl.innerHTML = EVIDENCE.map((event) => `
+    <div class="evidence-row">
+      <div class="evidence-main"><span class="evidence-id">${event.id}</span><strong>${event.type}</strong><span class="evidence-title">${event.title}</span></div>
+      <div class="evidence-meta"><span>${event.source}</span><span>${event.confidence}</span><span class="provenance ${String(event.provenance || 'SOURCE-LINKED').toLowerCase().replaceAll('-', '')}">${event.provenance || 'SOURCE-LINKED'}</span></div>
+      ${event.sha256 ? `<div class="evidence-hash">SHA-256 ${event.sha256.slice(0, 16)}… · custody ${event.chainOfCustody?.length ?? 1}</div>` : ''}
+    </div>
+  `).join('');
+};
+renderEvidenceRegister();
 
 document.querySelectorAll('.timeline-event').forEach((el) => {
   el.addEventListener('click', () => {
     document.querySelectorAll('.timeline-event').forEach((item) => item.classList.remove('selected'));
     el.classList.add('selected');
   });
+});
+
+const addEvidenceButton = document.querySelector('#addEvidence');
+const evidenceFileInput = document.querySelector('#evidenceFile');
+const evidenceType = document.querySelector('#evidenceType');
+const intakeStatus = document.querySelector('#intakeStatus');
+addEvidenceButton.addEventListener('click', () => evidenceFileInput.click());
+evidenceFileInput.addEventListener('change', async () => {
+  const [file] = evidenceFileInput.files ?? [];
+  if (!file) return;
+  addEvidenceButton.disabled = true;
+  intakeStatus.textContent = `HASHING ${file.name}…`;
+  try {
+    const sha256 = await hashBytes(await file.arrayBuffer());
+    const record = createEvidenceRecord({
+      caseId: INCIDENT.id,
+      type: evidenceType.value,
+      source: 'USER_UPLOAD',
+      sourceRef: file.name,
+      sha256,
+      capturedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+      ingestedAt: new Date().toISOString(),
+      mediaType: file.type || null,
+      sizeBytes: file.size,
+    });
+    const validation = validateEvidenceRecord(record);
+    if (!validation.valid) throw new Error(validation.errors.join('; '));
+    EVIDENCE.push({
+      id: record.id,
+      time: new Date(record.capturedAt ?? record.ingestedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+      type: record.type,
+      source: record.source,
+      title: record.sourceRef,
+      detail: `${record.mediaType || 'file'} · ${record.sizeBytes ?? 0} bytes · SHA-256 registered`,
+      confidence: 'MEDIUM',
+      provenance: 'SOURCE-LINKED',
+      sha256: record.sha256,
+      chainOfCustody: record.chainOfCustody,
+    });
+    renderEvidenceRegister();
+    intakeStatus.textContent = `REGISTERED ${record.id} · SHA-256 ${record.sha256.slice(0, 16)}…`;
+    evidenceFileInput.value = '';
+  } catch (error) {
+    intakeStatus.textContent = `INTAKE FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
+  } finally {
+    addEvidenceButton.disabled = false;
+  }
 });
 
 const a = [
