@@ -291,7 +291,7 @@ try {
   sceneRectangle = Cesium.Rectangle.fromCartographicArray(scenePoints);
   viewer.camera.flyTo({ destination: Cesium.Rectangle.expand(sceneRectangle, 0.006), duration: 1.6 });
 } catch (error) {
-  console.error('ClaimTrace map initialization failed:', error);
+  console.warn('ClaimTrace map initialization fallback:', error);
   showMapFallback('renderer initialization failed');
 }
 
