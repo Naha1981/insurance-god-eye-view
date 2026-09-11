@@ -29,7 +29,7 @@
 - [x] Tenant-scoped case/evidence access
 - [x] Audit events for authentication, case creation and evidence access
 - [x] Render backend/static-site deployment blueprint
-- [~] Dashcam/CCTV video metadata intake — implemented, CI verification pending
+- [~] Dashcam/CCTV video metadata intake plus authenticated artifact playback — implemented, CI verification pending
 - [ ] Photograph EXIF extraction
 - [~] GPS/telematics JSON ingestion and normalized persistence — implemented, CI verification pending
 - [~] GPS/telematics CSV intake and raw-file evidence provenance linking — implemented, CI verification pending
@@ -51,6 +51,7 @@
 - [~] Persisted telemetry rendered in Cesium reconstruction scene with investigator quality panel — implemented, CI verification pending
 - [~] Investigator-facing telemetry CSV import controls with timezone selection and provenance summary — implemented, CI verification pending
 - [~] Deterministic video-to-timeline synchronization and frame evidence indexing primitives — implemented, CI verification pending
+- [~] Authenticated dashcam/CCTV playback with capture-clock synchronization and derived frame reference UI — implemented, CI verification pending
 - [ ] Video frame extraction / thumbnail generation
 - [ ] Confidence/data-quality model backed by source evidence
 
