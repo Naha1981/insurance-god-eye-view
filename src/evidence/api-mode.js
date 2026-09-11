@@ -203,16 +203,22 @@ const renderTelemetryPanel = (points) => {
       const assessmentAfterImport = renderTelemetryPanel(refreshed);
       if (assessmentAfterImport && typeof window.claimtraceRenderTelemetry === 'function') {
         window.claimtraceRenderTelemetry({ points: refreshed, segments: assessmentAfterImport.segments });
+      } else if (typeof window.claimtraceSetSyntheticVisibility === 'function') {
+        window.claimtraceSetSyntheticVisibility(refreshed.length === 0);
       }
       const provenance = await listTelemetryProvenance(CASE_KEY_VALUE());
-      importStatus.textContent = `IMPORTED ${result.point_count} POINTS · ${result.rejected_rows} REJECTED · ${Math.round(result.total_distance_meters)} m · EVIDENCE ${result.evidence_id} · ${provenance.length} PROVENANCE LINKS`;
-      importFile.value = '';
+      const nextStatus = document.querySelector('#telemetryImportStatus');
+      if (nextStatus) {
+        nextStatus.textContent = `IMPORTED ${result.point_count} POINTS · ${result.rejected_rows} REJECTED · ${Math.round(result.total_distance_meters)} m · EVIDENCE ${result.evidence_id} · ${provenance.length} PROVENANCE LINKS`;
+      }
       return;
     } catch (error) {
       if (error?.status === 401) clearStoredToken();
-      importStatus.textContent = `IMPORT FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
+      const currentStatus = document.querySelector('#telemetryImportStatus');
+      if (currentStatus) currentStatus.textContent = `IMPORT FAILED · ${error instanceof Error ? error.message : 'Unknown error'}`;
     } finally {
-      importButton.disabled = false;
+      const currentButton = document.querySelector('#telemetryImportButton');
+      if (currentButton) currentButton.disabled = false;
     }
   });
   return assessment;
@@ -414,6 +420,8 @@ const enableApiMode = async () => {
       const assessment = renderTelemetryPanel(telemetry);
       if (assessment && typeof window.claimtraceRenderTelemetry === 'function') {
         window.claimtraceRenderTelemetry({ points: telemetry, segments: assessment.segments });
+      } else if (typeof window.claimtraceSetSyntheticVisibility === 'function') {
+        window.claimtraceSetSyntheticVisibility(telemetry.length === 0);
       }
     } catch (telemetryError) {
       const panel = document.querySelector('#telemetryPanel');
@@ -423,6 +431,7 @@ const enableApiMode = async () => {
         panel.innerHTML = '<div class="section-kicker">LIVE RECONSTRUCTION INPUT</div><div class="telemetry-quality">No persisted telemetry available for this case yet.</div>';
       }
       window.claimtraceClearTelemetry?.();
+      window.claimtraceSetSyntheticVisibility?.(true);
     }
   };
 
