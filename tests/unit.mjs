@@ -4,10 +4,12 @@ import { buildCaseAssessment, buildTrajectoryAssessment, correlateEvents, findMi
 import { appendCustodyEvent, buildEvidenceManifest, createEvidenceRecord, hashBytes, validateEvidenceRecord } from '../src/evidence/intake.js';
 import { normalizeTelemetry, enrichTelemetry } from '../src/evidence/geospatial.js';
 import { buildTrajectorySegments, summarizeTrajectory, interpolateTrajectory, interpolatePosition } from '../src/evidence/trajectory.js';
+import { buildFrameEvidenceIndex, frameTimeSeconds, frameTimestamp, normalizeVideoSync, timelineFrameIndex } from '../src/evidence/video-sync.js';
 
 const source = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
 const apiMode = await readFile(new URL('../src/evidence/api-mode.js', import.meta.url), 'utf8');
 const apiClient = await readFile(new URL('../src/evidence/api.js', import.meta.url), 'utf8');
+const videoSync = await readFile(new URL('../src/evidence/video-sync.js', import.meta.url), 'utf8');
 const render = await readFile(new URL('../render.yaml', import.meta.url), 'utf8');
 const prd = await readFile(new URL('../PRD.md', import.meta.url), 'utf8');
 
@@ -35,6 +37,8 @@ assert.match(apiClient, /\/telemetry/);
 assert.match(apiClient, /registerVideoMetadata/);
 assert.match(apiClient, /BROWSER_MEDIA_ELEMENT/);
 assert.match(apiClient, /readBrowserVideoMetadata/);
+assert.match(videoSync, /buildFrameEvidenceIndex/);
+assert.match(videoSync, /timelineFrameIndex/);
 assert.match(render, /claimtrace-api/);
 assert.match(render, /claimtrace-web/);
 assert.match(render, /claimtrace-db/);
@@ -115,6 +119,17 @@ const interpolated = interpolateTrajectory([
 assert.equal(interpolated.length, 6);
 assert.equal(interpolated.filter((point) => point.interpolated).length, 4);
 
+const videoSyncConfig = normalizeVideoSync({ captureStartAt: '2026-08-18T12:31:40Z', frameRate: 25, offsetSeconds: 0.2 });
+assert.deepEqual(videoSyncConfig, { captureStartAt: '2026-08-18T12:31:40.000Z', frameRate: 25, offsetSeconds: 0.2 });
+assert.equal(frameTimeSeconds(50, 25), 2);
+assert.equal(frameTimestamp(50, videoSyncConfig), '2026-08-18T12:31:42.200Z');
+assert.equal(timelineFrameIndex('2026-08-18T12:31:42.200Z', videoSyncConfig), 50);
+const frameIndex = buildFrameEvidenceIndex('e-video-1', videoSyncConfig, [0, 25, 50]);
+assert.equal(frameIndex.length, 3);
+assert.equal(frameIndex[2].timestamp, '2026-08-18T12:31:42.200Z');
+assert.equal(frameIndex.every((item) => item.synchronized), true);
+assert.equal(frameTimestamp(1, { captureStartAt: 'not-a-date', frameRate: 25 }), null);
+
 const helloHash = await hashBytes(new TextEncoder().encode('hello'));
 assert.equal(helloHash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
 
@@ -141,4 +156,4 @@ assert.equal(reviewed.chainOfCustody.length, 2);
 assert.notEqual(reviewed.id, undefined);
 assert.equal(buildEvidenceManifest([reviewed])[0].sha256, helloHash);
 
-console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + live telemetry + trajectory checks');
+console.log('PASS: ClaimTrace static + evidence engine + intake + multi-case + live telemetry + video synchronization checks');
