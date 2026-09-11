@@ -120,6 +120,24 @@ def test_investigator_report_is_downloadable(client):
     assert "does not determine legal liability" in report.text
 
 
+def test_case_listing_is_tenant_scoped_and_reports_evidence_counts(client):
+    first = client.post("/v1/cases", json={"title": "Case one"}).json()
+    second = client.post("/v1/cases", json={"title": "Case two"}).json()
+    evidence = client.post(
+        f"/v1/cases/{first['id']}/evidence",
+        json={"type": "PHOTO", "source": "UPLOAD", "sha256": "b" * 64},
+    )
+    assert evidence.status_code == 201
+
+    listed = client.get("/v1/cases")
+    assert listed.status_code == 200
+    payload = listed.json()
+    assert {item["id"] for item in payload} == {first["id"], second["id"]}
+    counts = {item["id"]: item["evidence_count"] for item in payload}
+    assert counts[first["id"]] == 1
+    assert counts[second["id"]] == 0
+
+
 def test_invalid_hash_is_rejected(client):
     case_id = client.post("/v1/cases", json={"title": "Hash validation case"}).json()["id"]
     invalid = client.post(
@@ -173,9 +191,19 @@ def test_authentication_and_tenant_isolation(monkeypatch, tmp_path):
         case = test_client.post("/v1/cases", headers=headers_a, json={"title": "Private case A"})
         assert case.status_code == 201
         case_id = case.json()["id"]
+        other_case = test_client.post("/v1/cases", headers=headers_b, json={"title": "Private case B"})
+        assert other_case.status_code == 201
 
         hidden = test_client.get(f"/v1/cases/{case_id}", headers=headers_b)
         assert hidden.status_code == 404
+
+        listed_a = test_client.get("/v1/cases", headers=headers_a)
+        assert listed_a.status_code == 200
+        assert [item["id"] for item in listed_a.json()] == [case_id]
+
+        listed_b = test_client.get("/v1/cases", headers=headers_b)
+        assert listed_b.status_code == 200
+        assert [item["id"] for item in listed_b.json()] == [other_case.json()["id"]]
 
         audit = test_client.get(f"/v1/cases/{case_id}/audit", headers=headers_a)
         assert audit.status_code == 200
