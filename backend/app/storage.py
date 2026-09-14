@@ -10,6 +10,8 @@ from alembic.config import Config
 from sqlalchemy import Column, DateTime, Float, Integer, LargeBinary, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text
 from sqlalchemy.engine import Connection, Engine
 
+from . import object_storage
+
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "claimtrace.sqlite3"
 metadata = MetaData()
 
@@ -97,7 +99,16 @@ def list_cases(tenant_id: str, status: str | None = None, limit: int = 50, offse
     count_map = {row.case_id: row.count for row in counts}
     return [_case_result(row, count_map.get(row.id, 0)) for row in rows]
 def insert_evidence(record: dict[str, Any]) -> None:
-    values = dict(record); values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
+    values = dict(record)
+    artifact_bytes = values.pop("artifact_bytes", None)
+    artifact_key = values.get("artifact_key")
+    if artifact_bytes is not None:
+        if not artifact_key:
+            raise ValueError("artifact_key is required when storing evidence bytes")
+        artifact_key = object_storage.put_bytes(key=str(artifact_key), content=bytes(artifact_bytes), media_type=values.get("media_type"))
+        values["artifact_key"] = artifact_key
+    values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
+    values["artifact_bytes"] = None
     with engine().begin() as connection: connection.execute(insert(evidence).values(**values))
 def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, Any]]:
     statement = select(evidence).where(evidence.c.case_id == case_id).order_by(evidence.c.ingested_at.asc())
@@ -110,8 +121,15 @@ def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, 
 def get_evidence_artifact(tenant_id: str, case_id: str, evidence_id: str) -> tuple[str | None, bytes, str | None] | None:
     with connect() as connection:
         row = connection.execute(select(evidence.c.artifact_key, evidence.c.artifact_bytes, evidence.c.media_type).where(evidence.c.id == evidence_id).where(evidence.c.case_id == case_id).where(evidence.c.tenant_id == tenant_id)).first()
-    if not row or row.artifact_bytes is None: return None
-    return row.artifact_key, bytes(row.artifact_bytes), row.media_type
+    if not row: return None
+    if row.artifact_bytes is not None:
+        return row.artifact_key, bytes(row.artifact_bytes), row.media_type
+    if not row.artifact_key:
+        return None
+    try:
+        return row.artifact_key, object_storage.get_bytes(key=row.artifact_key), row.media_type
+    except (FileNotFoundError, object_storage.ObjectStorageError):
+        return None
 def evidence_hash_exists(sha256: str, tenant_id: str | None = None) -> bool:
     statement = select(evidence.c.id).where(evidence.c.sha256 == sha256.lower()).limit(1)
     if tenant_id is not None: statement = statement.where(evidence.c.tenant_id == tenant_id)
