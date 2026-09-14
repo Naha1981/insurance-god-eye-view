@@ -1,4 +1,4 @@
-const API_BASE = String(import.meta.env.VITE_CLAIMTRACE_API_BASE ?? '').replace(/\/$/, '');
+const API_BASE = String(import.meta.env.VITE_CLAIMTRACE_API_BASE ?? 'https://claimtrace-api.onrender.com').trim().replace(/\/$/, '');
 const TOKEN_KEY = 'claimtrace_access_token';
 
 export const isApiConfigured = () => Boolean(API_BASE);
@@ -12,10 +12,19 @@ const request = async (path, options = {}) => {
   const headers = { Accept: 'application/json', ...(options.headers ?? {}) };
   const token = getStoredToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new Error(`Unable to reach ClaimTrace API at ${API_BASE}. Check that the Render backend is Live and CORS is configured. ${error instanceof Error ? error.message : ''}`.trim());
+  }
   if (!response.ok) {
     let detail = `API request failed (${response.status})`;
     try { detail = (await response.json()).detail ?? detail; } catch { /* preserve HTTP status */ }
+    if (response.status === 401) {
+      clearStoredToken();
+      sessionStorage.removeItem('claimtrace_case_id');
+    }
     const error = new Error(detail); error.status = response.status; throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -62,10 +71,16 @@ export const getEvidenceArtifact = async (caseId, evidenceId) => {
   const headers = { Accept: '*/*' };
   const token = getStoredToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/artifact`, { headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}/artifact`, { headers });
+  } catch (error) {
+    throw new Error(`Unable to reach ClaimTrace API at ${API_BASE}. ${error instanceof Error ? error.message : ''}`.trim());
+  }
   if (!response.ok) {
     let detail = `Evidence artifact request failed (${response.status})`;
     try { detail = (await response.json()).detail ?? detail; } catch { /* preserve HTTP status */ }
+    if (response.status === 401) clearStoredToken();
     const error = new Error(detail); error.status = response.status; throw error;
   }
   return { blob: await response.blob(), mediaType: response.headers.get('Content-Type') || 'application/octet-stream' };
@@ -121,8 +136,16 @@ export const uploadEvidence = async (caseId, { file, type, capturedAt, source = 
 export const downloadReport = async (caseId) => {
   if (!API_BASE) throw new Error('ClaimTrace API is not configured');
   const headers = { Accept: 'text/html' }; const token = getStoredToken(); if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/report`, { headers });
-  if (!response.ok) throw new Error(`Report generation failed (${response.status})`);
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/v1/cases/${encodeURIComponent(caseId)}/report`, { headers });
+  } catch (error) {
+    throw new Error(`Unable to reach ClaimTrace API at ${API_BASE}. ${error instanceof Error ? error.message : ''}`.trim());
+  }
+  if (!response.ok) {
+    if (response.status === 401) clearStoredToken();
+    throw new Error(`Report generation failed (${response.status})`);
+  }
   const blob = await response.blob(); const contentDisposition = response.headers.get('Content-Disposition') || ''; const filenameMatch = contentDisposition.match(/filename=\"([^\"]+)\"/i);
   return { blob, filename: filenameMatch?.[1] || `claimtrace-${caseId}-report.html` };
 };
