@@ -5,10 +5,8 @@
 #   - claimtrace-api: FastAPI web service
 #   - claimtrace-db: Render Postgres
 #
-# The free plans are suitable for validation/demo only. Render's free web service
-# filesystem is ephemeral, so ClaimTrace stores pilot evidence bytes in Postgres.
-# For a real insurer deployment, upgrade compute/database and move original
-# evidence bytes to dedicated immutable object storage.
+# Production evidence bytes live outside Postgres in immutable S3-compatible object storage.
+# Configure bucket-level Object Lock and supply the connection secrets below.
 
 services:
   - type: web
@@ -33,6 +31,28 @@ services:
         value: "https://claimtrace-web.onrender.com"
       - key: CLAIMTRACE_MAX_UPLOAD_BYTES
         value: "26214400"
+      - key: CLAIMTRACE_OBJECT_STORAGE_MODE
+        value: s3
+      - key: CLAIMTRACE_OBJECT_STORAGE_BUCKET
+        sync: false
+      - key: CLAIMTRACE_OBJECT_STORAGE_REGION
+        value: eu-central-1
+      - key: CLAIMTRACE_OBJECT_STORAGE_ENDPOINT
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLAIMTRACE_OBJECT_LOCK_MODE
+        value: COMPLIANCE
+      - key: CLAIMTRACE_OBJECT_LOCK_DAYS
+        value: "90"
+      - key: NAHALLM_BASE_URL
+        sync: false
+      - key: NAHALLM_API_KEY
+        sync: false
+      - key: CLAIMTRACE_AI_MODEL
+        value: fast
       - key: CLAIMTRACE_BOOTSTRAP_EMAIL
         sync: false
       - key: CLAIMTRACE_BOOTSTRAP_PASSWORD
