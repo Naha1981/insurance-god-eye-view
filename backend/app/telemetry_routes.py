@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from . import auth, storage, telemetry_import, telemetry_provenance
 from .frame_routes import router as frame_router
+from .recovery_routes import router as recovery_router
 
 MAX_IMPORT_BYTES = int(os.getenv("CLAIMTRACE_MAX_TELEMETRY_IMPORT_BYTES", os.getenv("CLAIMTRACE_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))))
 router = APIRouter()
@@ -105,3 +106,4 @@ def create_frame_reference(case_id: str,evidence_id: str,payload: dict,principal
 
 
 router.include_router(frame_router)
+router.include_router(recovery_router)
