@@ -79,6 +79,7 @@ jobs:
     env:
       CLAIMTRACE_OBJECT_STORAGE_MODE: filesystem
       CLAIMTRACE_OBJECT_STORAGE_DIR: ${{ github.workspace }}/backend/.claimtrace-object-store
+      PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
