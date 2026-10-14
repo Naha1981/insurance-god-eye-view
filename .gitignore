@@ -11,3 +11,4 @@ __pycache__/
 .venv/
 backend/.venv/
 backend/data/
+test-artifacts/

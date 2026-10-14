@@ -47,6 +47,11 @@ export const appendCustodyEvent = (record, event) => Object.freeze({
 export const validateEvidenceRecord = (record) => {
   const errors = [];
   for (const field of REQUIRED_FIELDS) {
+    // capturedAt may be explicitly null: capture time is never asserted when the source does not provide it.
+    if (field === 'capturedAt') {
+      if (record?.capturedAt === undefined) errors.push(`Missing ${field}`);
+      continue;
+    }
     if (record?.[field] == null || record[field] === '') errors.push(`Missing ${field}`);
   }
   if (record?.sha256 && !/^[a-f0-9]{64}$/i.test(record.sha256)) errors.push('sha256 must be a 64-character hexadecimal digest');
