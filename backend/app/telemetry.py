@@ -15,9 +15,9 @@ def _number(value):
     return number if math.isfinite(number) else None
 
 
-def normalize_coordinate(lat=None, lon=None, latitude=None, longitude=None):
+def normalize_coordinate(lat=None, lon=None, latitude=None, longitude=None, lng=None, lon_deg=None, **_ignored):
     normalized_lat = _number(lat if lat is not None else latitude)
-    normalized_lon = _number(lon if lon is not None else longitude)
+    normalized_lon = _number(lon if lon is not None else (longitude if longitude is not None else lng))
     if normalized_lat is None or normalized_lon is None:
         return None
     if not -90 <= normalized_lat <= 90:

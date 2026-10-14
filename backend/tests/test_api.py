@@ -41,7 +41,7 @@ def test_database_initialization_records_alembic_revision(configured_env):
         assert "video_metadata" in tables
         assert "alembic_version" in tables
         revision = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-    assert revision == "0004_immutable_media_provenance"
+    assert revision == "0005_recovery_assessments"
 
 
 def test_case_and_evidence_lifecycle(client):

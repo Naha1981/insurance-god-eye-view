@@ -53,7 +53,7 @@ export const normalizeTimestamp = (value, { sourceTimeZone = SOUTH_AFRICA_TIME_Z
 
 export const normalizeTelemetryPoint = (point, index = 0, options = {}) => {
   const coordinate = normalizeCoordinate(point);
-  const timestamp = normalizeTimestamp(point.timestamp ?? point.time ?? point.datetime ?? point.captured_at, options);
+  const timestamp = normalizeTimestamp(point.timestamp ?? point.timestampUtc ?? point.time ?? point.datetime ?? point.captured_at, options);
   if (!coordinate || !timestamp.utc) return null;
 
   return {

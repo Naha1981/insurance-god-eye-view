@@ -189,6 +189,7 @@ def normalize_evidence(record: dict) -> Evidence:
 def normalize_telemetry(record: dict) -> TelemetryPoint:
     data = dict(record)
     data["timestamp"] = data.pop("timestamp_utc")
+    data.pop("tenant_id", None)
     return TelemetryPoint.model_validate(data)
 
 

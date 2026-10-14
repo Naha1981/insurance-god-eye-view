@@ -11,18 +11,41 @@ from sqlalchemy import Column, DateTime, Float, Integer, LargeBinary, MetaData, 
 from sqlalchemy.engine import Connection, Engine
 
 from . import object_storage
+from datetime import timezone
+from sqlalchemy.types import TypeDecorator
+
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware UTC datetime that stays aware on SQLite, which drops tzinfo."""
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+
+
+
+
+def _json_default(value):
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "claimtrace.sqlite3"
 metadata = MetaData()
 
-tenants = Table("tenants", metadata, Column("id", String(120), primary_key=True), Column("name", String(240), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
-users = Table("users", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("email", String(320), nullable=False, unique=True), Column("password_hash", String(256), nullable=False), Column("role", String(40), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
-sessions = Table("sessions", metadata, Column("id", String(120), primary_key=True), Column("user_id", String(120), nullable=False), Column("token_hash", String(128), nullable=False, unique=True), Column("expires_at", DateTime(timezone=True), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
-cases = Table("cases", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("title", String(240), nullable=False), Column("incident_at", DateTime(timezone=True)), Column("location_json", Text), Column("status", String(40), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
-evidence = Table("evidence", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("type", String(40), nullable=False), Column("source", String(120), nullable=False), Column("source_ref", String(500)), Column("artifact_key", String(700)), Column("artifact_bytes", LargeBinary), Column("sha256", String(64), nullable=False), Column("captured_at", DateTime(timezone=True)), Column("ingested_at", DateTime(timezone=True), nullable=False), Column("media_type", String(120)), Column("size_bytes", Integer), Column("chain_of_custody_json", Text, nullable=False))
-video_metadata = Table("video_metadata", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("evidence_id", String(120), nullable=False, unique=True), Column("duration_seconds", Float), Column("width", Integer), Column("height", Integer), Column("frame_rate", Float), Column("capture_start_at", DateTime(timezone=True)), Column("metadata_source", String(80), nullable=False), Column("metadata_version", String(40), nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
-telemetry_points = Table("telemetry_points", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("timestamp_utc", DateTime(timezone=True), nullable=False), Column("timestamp_local", String(80), nullable=False), Column("source_timezone", String(80), nullable=False), Column("assumed_timezone", Integer, nullable=False), Column("lat", Float, nullable=False), Column("lon", Float, nullable=False), Column("speed_kph", Float), Column("heading_deg", Float), Column("accuracy_meters", Float), Column("vehicle_id", String(160)), Column("segment_distance_meters", Float), Column("elapsed_seconds", Float), Column("derived_speed_kph", Float), Column("created_at", DateTime(timezone=True), nullable=False))
-audit_events = Table("audit_events", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120)), Column("actor_user_id", String(120)), Column("action", String(120), nullable=False), Column("resource_type", String(80)), Column("resource_id", String(160)), Column("metadata_json", Text), Column("created_at", DateTime(timezone=True), nullable=False))
+tenants = Table("tenants", metadata, Column("id", String(120), primary_key=True), Column("name", String(240), nullable=False), Column("created_at", UTCDateTime(), nullable=False))
+users = Table("users", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("email", String(320), nullable=False, unique=True), Column("password_hash", String(256), nullable=False), Column("role", String(40), nullable=False), Column("created_at", UTCDateTime(), nullable=False))
+sessions = Table("sessions", metadata, Column("id", String(120), primary_key=True), Column("user_id", String(120), nullable=False), Column("token_hash", String(128), nullable=False, unique=True), Column("expires_at", UTCDateTime(), nullable=False), Column("created_at", UTCDateTime(), nullable=False))
+cases = Table("cases", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("title", String(240), nullable=False), Column("incident_at", UTCDateTime()), Column("location_json", Text), Column("status", String(40), nullable=False), Column("created_at", UTCDateTime(), nullable=False))
+evidence = Table("evidence", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("type", String(40), nullable=False), Column("source", String(120), nullable=False), Column("source_ref", String(500)), Column("artifact_key", String(700)), Column("artifact_bytes", LargeBinary), Column("sha256", String(64), nullable=False), Column("captured_at", UTCDateTime()), Column("ingested_at", UTCDateTime(), nullable=False), Column("media_type", String(120)), Column("size_bytes", Integer), Column("chain_of_custody_json", Text, nullable=False))
+video_metadata = Table("video_metadata", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("evidence_id", String(120), nullable=False, unique=True), Column("duration_seconds", Float), Column("width", Integer), Column("height", Integer), Column("frame_rate", Float), Column("capture_start_at", UTCDateTime()), Column("metadata_source", String(80), nullable=False), Column("metadata_version", String(40), nullable=False), Column("created_at", UTCDateTime(), nullable=False))
+telemetry_points = Table("telemetry_points", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120), nullable=False), Column("case_id", String(120), nullable=False), Column("timestamp_utc", UTCDateTime(), nullable=False), Column("timestamp_local", String(80), nullable=False), Column("source_timezone", String(80), nullable=False), Column("assumed_timezone", Integer, nullable=False), Column("lat", Float, nullable=False), Column("lon", Float, nullable=False), Column("speed_kph", Float), Column("heading_deg", Float), Column("accuracy_meters", Float), Column("vehicle_id", String(160)), Column("segment_distance_meters", Float), Column("elapsed_seconds", Float), Column("derived_speed_kph", Float), Column("created_at", UTCDateTime(), nullable=False))
+audit_events = Table("audit_events", metadata, Column("id", String(120), primary_key=True), Column("tenant_id", String(120)), Column("actor_user_id", String(120)), Column("action", String(120), nullable=False), Column("resource_type", String(80)), Column("resource_id", String(160)), Column("metadata_json", Text), Column("created_at", UTCDateTime(), nullable=False))
 
 
 def database_url() -> str:
@@ -107,7 +130,7 @@ def insert_evidence(record: dict[str, Any]) -> None:
             raise ValueError("artifact_key is required when storing evidence bytes")
         artifact_key = object_storage.put_bytes(key=str(artifact_key), content=bytes(artifact_bytes), media_type=values.get("media_type"))
         values["artifact_key"] = artifact_key
-    values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"))
+    values["chain_of_custody_json"] = json.dumps(values.pop("chain_of_custody"), separators=(",", ":"), default=_json_default)
     values["artifact_bytes"] = None
     with engine().begin() as connection: connection.execute(insert(evidence).values(**values))
 def list_evidence(case_id: str, tenant_id: str | None = None) -> list[dict[str, Any]]:
@@ -150,7 +173,7 @@ def list_telemetry_points(case_id: str, tenant_id: str) -> list[dict[str, Any]]:
     with connect() as connection: rows = connection.execute(statement).mappings().all()
     return [dict(row) for row in rows]
 def insert_audit_event(event: dict[str, Any]) -> None:
-    payload = dict(event); metadata_value = payload.pop("metadata", None); payload["metadata_json"] = json.dumps(metadata_value, separators=(",", ":")) if metadata_value is not None else None
+    payload = dict(event); metadata_value = payload.pop("metadata", None); payload["metadata_json"] = json.dumps(metadata_value, separators=(",", ":"), default=_json_default) if metadata_value is not None else None
     with engine().begin() as connection: connection.execute(insert(audit_events).values(**payload))
 def list_audit_events(tenant_id: str, resource_id: str | None = None) -> list[dict[str, Any]]:
     statement = select(audit_events).where(audit_events.c.tenant_id == tenant_id).order_by(audit_events.c.created_at.desc())

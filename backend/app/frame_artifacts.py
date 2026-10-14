@@ -8,6 +8,10 @@ from sqlalchemy import text
 from . import object_storage, storage
 
 
+def _json_default(value):
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -28,7 +32,7 @@ def insert_frame_artifact(*, tenant_id: str, case_id: str, evidence_id: str, fra
             "id": frame_id, "tenant_id": tenant_id, "case_id": case_id, "evidence_id": evidence_id,
             "frame_index": frame_index, "timestamp_utc": timestamp_utc, "sha256": sha256,
             "media_type": media_type, "size_bytes": size_bytes, "artifact_key": artifact_key,
-            "provenance_json": json.dumps(provenance or {}, separators=(",", ":")), "created_at": created_at,
+            "provenance_json": json.dumps(provenance or {}, separators=(",", ":"), default=_json_default), "created_at": created_at,
         })
     return {"id": frame_id, "case_id": case_id, "evidence_id": evidence_id, "frame_index": frame_index, "timestamp_utc": timestamp_utc, "sha256": sha256, "media_type": media_type, "size_bytes": size_bytes, "artifact_key": artifact_key, "provenance": provenance or {}, "created_at": created_at}
 

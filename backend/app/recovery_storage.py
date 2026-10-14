@@ -8,6 +8,10 @@ from sqlalchemy import Column, DateTime, Float, Integer, MetaData, String, Text,
 
 from .storage import engine
 
+
+def _json_default(value):
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
 metadata = MetaData()
 
 recovery_assessments = Table(
@@ -33,7 +37,7 @@ recovery_assessments = Table(
 
 def insert_assessment(record: dict[str, Any]) -> None:
     values = dict(record)
-    values["risk_flags_json"] = json.dumps(values.pop("risk_flags"), separators=(",", ":"))
+    values["risk_flags_json"] = json.dumps(values.pop("risk_flags"), separators=(",", ":"), default=_json_default)
     with engine().begin() as connection:
         connection.execute(insert(recovery_assessments).values(**values))
 
