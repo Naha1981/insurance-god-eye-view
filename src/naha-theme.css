@@ -64,3 +64,78 @@ body, .rail, .topbar, .workspace, .content-grid { background: var(--background);
   input, select, textarea { font-size: 16px; }
   .screen-stack { padding: 12px; }
 }
+
+/* phone: rail becomes a top bar, readable type, dark controls */
+@media (max-width: 760px) {
+  .rail { width: 100%; height: auto; flex-direction: row; align-items: center; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--border, #1b2a39); gap: 6px; overflow-x: auto; }
+  .rail-label, .rail-spacer { display: none; }
+  .brand-mark { width: 36px; height: 36px; flex: 0 0 auto; }
+  .rail-btn { width: auto; min-width: 44px; height: 40px; padding: 0 10px; font-size: 14px; flex: 0 0 auto; }
+  .workspace { width: 100%; }
+  .topbar { padding: 12px; }
+  .topbar h1, .topbar .case-title { font-size: 20px; line-height: 1.25; }
+  .case-pill { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 12px; margin: 4px 0; }
+  .eyebrow, .section-kicker { font-size: 11px; }
+  .mini-chip, .small-note, .event-detail, .event-time, .legend-row, .hud-sub, .hud-title { font-size: 12px; }
+  .confidence { font-size: 11px; padding: 3px 6px; }
+  .event-title, .claim-row { font-size: 14px; }
+  .workflow-step { background: var(--card, #0b1c2c); color: var(--foreground, #dbeaf6); border: 1px solid var(--border, #26394b); border-radius: 10px; text-align: left; padding: 10px 12px; width: 100%; }
+  .workflow-steps { display: grid; grid-template-columns: 1fr; }
+  .map-hud.top-left { left: 8px; top: 8px; }
+  .reconstruction-stamp { font-size: 11px; right: 8px; bottom: 8px; }
+}
+
+@media (max-width: 760px) {
+  .rail { width: 100% !important; padding: 8px 12px !important; height: auto !important; flex-direction: row !important; }
+  .rail-nav, .rail-footer { display: none !important; }
+  .rail::after { content: "ClaimTrace"; font: 700 16px var(--font-sans, system-ui); color: var(--foreground, #edf4fa); }
+  .workflow-nav { padding: 12px !important; flex-direction: column; align-items: stretch; }
+  .workflow-steps { display: grid !important; grid-template-columns: 1fr !important; }
+  .workflow-arrow { display: none !important; }
+  .workflow-step { flex-direction: row; gap: 10px; }
+  .workflow-step > span:last-child, .workflow-step strong + span { display: block; }
+  .workflow-step strong { display: block; }
+  .workflow-upload-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 8px; }
+  .workflow-upload-tile { background: var(--card, #0b1c2c) !important; color: var(--foreground, #dbeaf6) !important; border: 1px solid var(--border, #26394b) !important; border-radius: 10px; padding: 12px !important; text-align: left !important; display: grid !important; gap: 2px; }
+  .workflow-upload-tile strong { display: block; font-size: 15px; }
+  .workflow-upload-tile span, .workflow-upload-tile small { display: block; font-size: 13px; color: var(--muted-foreground, #8aa1b5); }
+  .screen-header, .screen-body, .screen-actions { padding-left: 12px; padding-right: 12px; }
+  .card-header { flex-wrap: wrap; gap: 6px; }
+}
+@media (max-width: 760px) {
+  .workflow-step strong, .workflow-step small { display: block; }
+  .workflow-step small { font-size: 12px; color: var(--muted-foreground, #8aa1b5); margin-top: 2px; }
+}
+@media (max-width: 760px) {
+  .workflow-steps { display: flex !important; overflow-x: auto; scroll-snap-type: x mandatory; gap: 8px; padding-bottom: 4px; }
+  .workflow-step { flex: 0 0 168px !important; width: auto !important; scroll-snap-align: start; min-height: 0 !important; }
+  .workflow-step-number { display: inline; }
+}
+
+/* intake tiles and unstyled intake controls (all widths) */
+.upload-tile { display: grid; gap: 2px; min-height: 96px; padding: 12px; border: 1px solid var(--border, #213a4f); border-radius: 10px; background: var(--card, #0b1b29); color: var(--foreground, #dbeaf4); text-align: left; cursor: pointer; font: inherit; }
+.upload-tile:hover { border-color: var(--primary, #3c6f90); }
+.upload-icon { display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 8px; border: 1px solid var(--border, #2a516b); border-radius: 7px; color: var(--primary, #67c7ff); }
+.upload-tile strong { display: block; font-size: 15px; }
+.upload-tile small { display: block; font-size: 13px; color: var(--muted-foreground, #8aa1b5); line-height: 1.35; }
+.api-auth-card, .case-switcher-card { border: 1px solid var(--border, #20364a); background: var(--card, #0a1724); border-radius: 12px; padding: 14px; color: var(--foreground, #edf4fa); }
+.api-auth-error, .case-switcher-error { color: var(--disputed, #ff8d79); font-size: 13px; }
+.case-row { display: flex; justify-content: space-between; gap: 8px; padding: 10px; border: 1px solid var(--border, #20364a); border-radius: 10px; background: var(--card, #0a1724); color: var(--foreground, #edf4fa); }
+.capture-time-field, .video-capture-start { display: grid; gap: 4px; font-size: 13px; color: var(--muted-foreground, #8aa1b5); }
+.telemetry-grid, .telemetry-import-grid, .video-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.telemetry-metric { border: 1px solid var(--border, #20364a); border-radius: 10px; padding: 10px; background: var(--card, #0a1724); }
+@media (max-width: 760px) {
+  .upload-tile { min-height: 0; }
+  .upload-grid, .intake-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 8px; }
+  .telemetry-grid, .telemetry-import-grid, .video-meta-grid { grid-template-columns: 1fr 1fr; }
+}
+.workflow-kicker, .workflow-sub { display: block; }
+.workflow-sub { font-size: 13px; }
+@media (max-width: 760px) {
+  .map-card { min-height: 420px; display: flex; flex-direction: column; }
+  .map-card .map { flex: 1; min-height: 300px; }
+  .map-hud.bottom-left { position: static; margin: 8px; pointer-events: auto; }
+  .map-hud.top-left { position: static; margin: 8px; }
+  .reconstruction-stamp { position: static; margin: 0 8px 8px; }
+  .map-status { max-width: 86%; font-size: 13px; }
+}
