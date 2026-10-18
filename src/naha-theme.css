@@ -1,0 +1,66 @@
+/* NahaLabs shared design standard (CargoIQ): fonts, tokens, DISPUTED marker, phone-first layout.
+   Loaded last so it re-skins the existing ClaimTrace screens without changing their logic. */
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius: 0.5rem;
+  --background: oklch(0.17 0.012 240);
+  --foreground: oklch(0.95 0.005 240);
+  --card: oklch(0.21 0.013 240);
+  --panel: oklch(0.19 0.012 240);
+  --primary: oklch(0.82 0.15 75);
+  --border: oklch(0.3 0.013 240);
+  --observed: oklch(0.78 0.13 175);
+  --reported: oklch(0.72 0.12 245);
+  --derived: oklch(0.82 0.15 75);
+  --inferred: oklch(0.7 0.03 240);
+  --disputed: oklch(0.68 0.2 25);
+  /* remap the existing ClaimTrace palette onto the shared tokens */
+  --ct-bg: var(--background);
+  --ct-panel: var(--panel);
+  --ct-border: var(--border);
+  --ct-border-strong: oklch(0.36 0.014 240);
+  --ct-text: var(--foreground);
+  --ct-accent: var(--primary);
+  --ct-green: var(--observed);
+  --ct-amber: var(--derived);
+  --ct-red: var(--disputed);
+}
+:root, body, button, input, select, textarea { font-family: var(--font-sans); }
+html, body { background: var(--background); color: var(--foreground); }
+body, .rail, .topbar, .workspace, .content-grid { background: var(--background); }
+.rail, .topbar, .right-panel, .map-card, .card, .panel-block, .workflow-nav { background: var(--card); border-color: var(--border); }
+.eyebrow, .section-kicker, .screen-kicker, .case-pill, .status-pill, .mini-chip, .card-badge, .event-time, .hud-title, .footer-badge, .ghost-btn { font-family: var(--font-mono); }
+.brand-mark { border-color: var(--primary); color: var(--primary); }
+.ghost-btn, .intake-btn, .rail-btn.active { border-color: var(--border); }
+.ghost-btn:hover { border-color: var(--primary); }
+.score, .timeline-event.selected .event-line { color: var(--primary); }
+.confidence-bar span { background: var(--primary); }
+.legend-line.a { background: var(--reported); }
+.legend-line.b { background: var(--derived); }
+.legend-point { background: var(--disputed); box-shadow: 0 0 7px color-mix(in oklch, var(--disputed) 60%, transparent); }
+
+/* DISPUTED marker (shared rule): pulsing dot + uppercase mono label, never any other red */
+.dispute-badge { display: inline-flex; align-items: center; gap: 6px; border: 1px solid color-mix(in oklch, var(--disputed) 40%, transparent); background: color-mix(in oklch, var(--disputed) 15%, transparent); color: var(--disputed); border-radius: 999px; padding: 3px 8px; font: 700 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.dispute-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--disputed); animation: dispute-pulse 1.6s ease-in-out infinite; }
+@keyframes dispute-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
+.is-disputed, .claim-row.conflicting, .claim-row.contradicted { border-color: color-mix(in oklch, var(--disputed) 40%, transparent) !important; background: color-mix(in oklch, var(--disputed) 8%, var(--card)) !important; }
+.claim-result.supported { color: var(--observed); background: color-mix(in oklch, var(--observed) 15%, transparent); }
+.claim-result.not-established { color: var(--derived); background: color-mix(in oklch, var(--derived) 15%, transparent); }
+.claim-result.conflicting, .claim-result.contradicted { color: var(--disputed); background: color-mix(in oklch, var(--disputed) 15%, transparent); }
+
+/* phone-first: 390px */
+@media (max-width: 760px) {
+  html, body, #app { height: auto; min-height: 100%; overflow: auto; }
+  #app { display: block; }
+  .topbar { min-height: 0; flex-wrap: wrap; gap: 10px; }
+  .top-actions { flex-wrap: wrap; white-space: normal; }
+  .content-grid { grid-template-columns: 1fr; grid-template-rows: auto; overflow: visible; }
+  .map-card { min-height: 320px; }
+  .right-panel { min-height: 0; }
+  .workflow-steps { gap: 8px; }
+  .workflow-step { min-width: 140px; min-height: 48px; }
+  .ghost-btn, .intake-btn, button { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+  .screen-stack { padding: 12px; }
+}
