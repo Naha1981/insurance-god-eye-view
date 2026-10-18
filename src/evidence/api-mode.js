@@ -160,12 +160,37 @@ const renderApiEvidence = (records) => {
   if (heading) heading.textContent = `${records.length} evidence events`;
 };
 
+
+const hav = (a, b) => { const R = 6371000, r = (x) => x * Math.PI / 180; const dLat = r(b.lat - a.lat), dLon = r(b.lon - a.lon); const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const speedChecks = (points) => {
+  const byV = new Map();
+  points.forEach((p) => { const k = p.vehicle_id ?? 'Unassigned'; if (!byV.has(k)) byV.set(k, []); byV.get(k).push(p); });
+  const out = [];
+  byV.forEach((list, vehicle) => {
+    list.sort((x, y) => new Date(x.timestamp ?? x.timestamp_utc) - new Date(y.timestamp ?? y.timestamp_utc));
+    for (let i = 1; i < list.length; i += 1) {
+      const dt = (new Date(list[i].timestamp ?? list[i].timestamp_utc) - new Date(list[i - 1].timestamp ?? list[i - 1].timestamp_utc)) / 1000;
+      if (!(dt > 0) || list[i].speed_kph == null) continue;
+      const derived = (hav(list[i - 1], list[i]) / dt) * 3.6;
+      const disputed = Math.abs(derived - list[i].speed_kph) > Math.max(10, list[i].speed_kph * 0.25);
+      out.push({ vehicle, at: list[i].timestamp_local, reported: list[i].speed_kph, derived, disputed });
+    }
+  });
+  return out;
+};
+const speedCheckHtml = (points) => {
+  const rows = speedChecks(points);
+  if (!rows.length) return '';
+  const n = rows.filter((r) => r.disputed).length;
+  return `<div class="speed-check"><div class="section-kicker">REPORTED SPEED VS MOVEMENT</div><p class="small-note">${n ? `${n} of ${rows.length} readings disagree with how far the vehicle actually moved.` : 'Reported speeds match the movement.'}</p>${rows.map((r) => `<div class="claim-row ${r.disputed ? 'conflicting' : ''}"><strong>${r.vehicle}</strong> at ${r.at}: reported ${r.reported.toFixed(0)} km/h, moved at ${r.derived.toFixed(0)} km/h ${r.disputed ? '<span class="dispute-badge">Disputed</span>' : ''}</div>`).join('')}</div>`;
+};
+
 const renderTelemetryPanel = (points) => {
   const panel = document.querySelector('#telemetryPanel');
   if (!panel) return null;
   const raw = points.map((point) => ({
     ...point,
-    timestamp: point.timestamp_utc,
+    timestamp: point.timestamp ?? point.timestamp_utc,
     lat: point.lat,
     lon: point.lon,
     accuracyMeters: point.accuracy_meters,
@@ -189,6 +214,7 @@ const renderTelemetryPanel = (points) => {
       <div class="telemetry-metric"><span>Signal quality</span><strong>${confidence}%</strong></div>
     </div>
     <div class="telemetry-quality">${summary.segmentCount} observed trajectory segments · ${summary.lowConfidenceSegments} low-confidence segments · average reported accuracy ${avgAccuracy == null ? 'unknown' : `${avgAccuracy.toFixed(1)} m`}. Movement shown on the map is evidence reconstruction, not recorded crash footage.</div>
+    ${speedCheckHtml(points)}
     <div class="telemetry-import">
       <div class="section-kicker">RAW GPS / TELEMATICS IMPORT</div>
       <div class="telemetry-import-grid">

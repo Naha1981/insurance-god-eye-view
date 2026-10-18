@@ -171,6 +171,7 @@ const initViewer = () => {
   viewerInitialized = true;
   try {
     viewer = new Cesium.Viewer('cesiumContainer', { animation:false, timeline:false, baseLayerPicker:false, geocoder:false, homeButton:false, sceneModePicker:false, navigationHelpButton:false, fullscreenButton:false, selectionIndicator:false, infoBox:false, terrainProvider:new Cesium.EllipsoidTerrainProvider(), imageryProvider:false });
+    try { viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({ url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maximumLevel:19, credit:'© OpenStreetMap contributors' })); } catch (e) { console.warn('basemap unavailable', e); }
     viewer.scene.globe.enableLighting = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#07121f');
     viewer.scene.skyAtmosphere.show = true;
