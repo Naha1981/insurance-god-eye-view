@@ -199,8 +199,9 @@ const installMapSnapshot = (caseId) => {
     btn.disabled = true; status.textContent = 'Capturing map...';
     try {
       const blob = await window.claimtraceCaptureMap();
-      const file = new File([blob], `map-snapshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, { type: 'image/png' });
-      const record = await uploadEvidence(block.dataset.caseId, { file, type: 'OTHER', source: 'MAP_SNAPSHOT_RECONSTRUCTION', capturedAt: new Date().toISOString() });
+      const sample = window.claimtraceSampleMode === true;
+      const file = new File([blob], `${sample ? 'SAMPLE-not-case-data-' : ''}map-snapshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, { type: 'image/png' });
+      const record = await uploadEvidence(block.dataset.caseId, { file, type: 'OTHER', source: sample ? 'MAP_SNAPSHOT_SAMPLE_NOT_CASE_DATA' : 'MAP_SNAPSHOT_RECONSTRUCTION', capturedAt: new Date().toISOString() });
       renderApiEvidence(await listEvidence(block.dataset.caseId));
       status.textContent = `SEALED ${record.id} · SHA-256 ${record.sha256.slice(0, 16)}… · in the evidence register and the exported report. Reconstruction view, not recorded footage.`;
     } catch (error) { status.textContent = `Not added: ${error.message}`; } finally { btn.disabled = false; }

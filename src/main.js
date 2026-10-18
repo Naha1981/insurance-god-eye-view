@@ -95,7 +95,7 @@ app.innerHTML = `
             <div class="map-hud top-left"><div class="hud-title">RECONSTRUCTION VIEW</div><div class="hud-sub">Johannesburg · South Africa</div></div>
             <div class="map-hud bottom-left"><div id="syntheticLegendVehicleA" class="legend-row" hidden><span class="legend-line a"></span> Sample Vehicle A (synthetic) trajectory</div><div id="syntheticLegendVehicleB" class="legend-row" hidden><span class="legend-line b"></span> Sample Vehicle B (synthetic) trajectory</div><div id="syntheticLegendImpact" class="legend-row" hidden><span class="legend-point"></span> Sample impact point (synthetic)</div><div id="liveTelemetryLegend" class="legend-row" hidden><span class="legend-line live"></span> Evidence-linked telemetry</div></div>
             <div class="reconstruction-stamp">RECONSTRUCTION — NOT ACTUAL CRASH FOOTAGE</div>
-            <div class="reconstruction-empty" id="reconstructionEmpty"><div class="reconstruction-empty-card"><span class="screen-kicker">WAITING FOR SOURCE EVIDENCE</span><strong>No evidence-backed reconstruction is available yet.</strong><p>Import telemetry or register source media first.</p><button class="ghost-btn" data-stage="evidence" type="button">GO TO EVIDENCE</button></div></div>
+            <div class="reconstruction-empty" id="reconstructionEmpty"><div class="reconstruction-empty-card"><span class="screen-kicker">WAITING FOR SOURCE EVIDENCE</span><strong>No evidence-backed reconstruction is available yet.</strong><p>Import telemetry or register source media first.</p><button class="ghost-btn" data-stage="evidence" type="button">GO TO EVIDENCE</button><button class="ghost-btn" id="viewSampleScene" type="button">VIEW SAMPLE RECONSTRUCTION</button><p class="small-note">Sample only: two made-up vehicles to show what the 3D view does. It is not case data.</p></div></div>
           </section>
           <aside class="reconstruction-side">
             <div class="card reconstruction-legend-card"><div class="section-kicker">INTERPRETATION</div><div class="legend-definition"><span class="definition-dot source"></span><div><strong>Source-linked</strong><small>Directly tied to uploaded evidence.</small></div></div><div class="legend-definition"><span class="definition-dot derived"></span><div><strong>Derived</strong><small>Calculated from one or more source records.</small></div></div><div class="legend-definition"><span class="definition-dot unknown"></span><div><strong>Unresolved</strong><small>Not established by the current evidence.</small></div></div></div>
@@ -147,7 +147,8 @@ const showMapFallback = (reason) => {
 };
 
 const setSyntheticSceneVisibility = (visible) => {
-  syntheticSceneVisible = Boolean(visible) && !window.claimtraceApiMode;
+  syntheticSceneVisible = Boolean(visible) && (!window.claimtraceApiMode || window.claimtraceSampleMode === true);
+  if (!visible) window.claimtraceSampleMode = false;
   syntheticSceneEntities.forEach((entity) => { entity.show = syntheticSceneVisible; });
   ['syntheticLegendVehicleA','syntheticLegendVehicleB','syntheticLegendImpact'].forEach((id) => {
     const el = document.querySelector(`#${id}`);
@@ -188,8 +189,9 @@ const initViewer = () => {
 
 const renderDemoScene = () => {
   const cesium = initViewer();
-  if (!cesium || window.claimtraceApiMode) return;
-  if (syntheticSceneEntities.length) return;
+  if (!cesium) return;
+  if (window.claimtraceApiMode && window.claimtraceSampleMode !== true) return;
+  if (syntheticSceneEntities.length) { setSyntheticSceneVisibility(true); return; }
   const a = [[28.0147,-26.2410],[28.0168,-26.2420],[28.0188,-26.2432],[28.0205,-26.2466]];
   const b = [[28.0246,-26.2490],[28.0230,-26.2483],[28.0216,-26.2474],[28.0205,-26.2466]];
   addTrajectory('demo-vehicle-a', a, '#4ab4ff');
@@ -203,7 +205,7 @@ const renderDemoScene = () => {
 };
 
 const updateReconstructionState = (hasEvidence, hasTelemetry = false) => {
-  const ready = Boolean(hasTelemetry);
+  const ready = Boolean(hasTelemetry) || window.claimtraceSampleMode === true;
   if (reconstructionEmpty) reconstructionEmpty.hidden = ready;
   if (reconstructionInputEmpty) reconstructionInputEmpty.hidden = ready;
   if (!ready && !window.claimtraceApiMode) setSyntheticSceneVisibility(false);
@@ -247,6 +249,13 @@ window.claimtraceCaptureMap = () => new Promise((resolve, reject) => {
   cesium.scene.render();
   cesium.scene.canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Map snapshot failed'))), 'image/png');
 });
+window.claimtraceShowSample = () => {
+  window.claimtraceSampleMode = true;
+  if (reconstructionEmpty) reconstructionEmpty.hidden = true;
+  renderDemoScene();
+  if (mapStatus) { mapStatus.hidden = false; mapStatus.textContent = 'SAMPLE RECONSTRUCTION · made-up vehicles, not case data'; }
+};
+document.querySelector('#viewSampleScene')?.addEventListener('click', () => window.claimtraceShowSample());
 window.claimtraceRenderTelemetry = renderLiveTelemetry;
 window.claimtraceClearTelemetry = clearLiveTelemetry;
 window.claimtraceSetSyntheticVisibility = setSyntheticSceneVisibility;
