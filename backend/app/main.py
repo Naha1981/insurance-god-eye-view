@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -218,6 +218,27 @@ def login(payload: auth.LoginRequest) -> LoginResponse:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     principal, token = result
     audit(principal, "AUTH_LOGIN", "USER", principal.user_id)
+    return LoginResponse(access_token=token, expires_in_hours=auth.SESSION_HOURS, user=principal)
+
+
+_signup_hits: dict[str, list[float]] = {}
+
+
+@app.post("/v1/auth/register", response_model=LoginResponse)
+def register(payload: auth.RegisterRequest, request: Request) -> LoginResponse:
+    import time
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+    hits = [t for t in _signup_hits.get(ip, []) if time.time() - t < 3600]
+    if len(hits) >= 10:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many sign-ups from this network. Try again later.")
+    _signup_hits[ip] = hits + [time.time()]
+    try:
+        principal, token = auth.register(payload.email, payload.password, payload.company_name)
+    except auth.EmailTaken:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists. Sign in instead.")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    audit(principal, "AUTH_REGISTER", "USER", principal.user_id)
     return LoginResponse(access_token=token, expires_in_hours=auth.SESSION_HOURS, user=principal)
 
 

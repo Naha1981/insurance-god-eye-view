@@ -28,6 +28,39 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=12, max_length=200)
+    company_name: str = Field(min_length=2, max_length=120)
+
+
+class EmailTaken(Exception):
+    pass
+
+
+def register(email: str, password: str, company_name: str) -> tuple[Principal, str]:
+    """Open self-signup: every new user gets their own isolated tenant and is its admin."""
+    email = email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise ValueError("Enter a valid email address")
+    if storage.get_user_by_email(email):
+        raise EmailTaken()
+    now = datetime.now(timezone.utc)
+    tenant_id = f"TENANT-{uuid4()}"
+    storage.insert_tenant({"id": tenant_id, "name": company_name.strip(), "created_at": now})
+    storage.insert_user({
+        "id": f"USR-{uuid4()}",
+        "tenant_id": tenant_id,
+        "email": email,
+        "password_hash": hash_password(password),
+        "role": "ADMIN",
+        "created_at": now,
+    })
+    result = authenticate(email, password)
+    assert result is not None
+    return result
+
+
 def auth_required() -> bool:
     return os.getenv("CLAIMTRACE_AUTH_MODE", "required").lower() != "disabled"
 

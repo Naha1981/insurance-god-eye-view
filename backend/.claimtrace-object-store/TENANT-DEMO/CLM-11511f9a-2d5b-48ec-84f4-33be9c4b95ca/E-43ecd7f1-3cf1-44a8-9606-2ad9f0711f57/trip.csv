@@ -1,0 +1,4 @@
+timestamp,latitude,longitude,speed_kph,vehicle_id
+2026-08-18 14:31:49,-26.24670,28.02040,36.0,VH-A
+2026-08-18 14:31:51,-26.24655,28.02060,42.0,VH-A
+not-a-time,-26.24650,28.02070,41.0,VH-A

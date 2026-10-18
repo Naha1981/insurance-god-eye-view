@@ -15,7 +15,7 @@ const request = async (path, options = {}) => {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
     let detail = `API request failed (${response.status})`;
-    try { detail = (await response.json()).detail ?? detail; } catch { /* preserve HTTP status */ }
+    try { const d = (await response.json()).detail; detail = Array.isArray(d) ? d.map((x) => (x.msg ?? '').replace(/^Value error, /, '')).join('. ') || detail : (d ?? detail); } catch { /* preserve HTTP status */ }
     const error = new Error(detail); error.status = response.status; throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -23,6 +23,10 @@ const request = async (path, options = {}) => {
 
 export const login = async (email, password) => {
   const body = await request('/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+  setStoredToken(body.access_token); return body;
+};
+export const register = async (email, password, company_name) => {
+  const body = await request('/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, company_name }) });
   setStoredToken(body.access_token); return body;
 };
 export const getMe = () => request('/v1/auth/me');

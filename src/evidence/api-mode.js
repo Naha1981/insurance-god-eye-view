@@ -15,6 +15,7 @@ import {
   listTelemetry,
   listTelemetryProvenance,
   login,
+  register,
   uploadEvidence,
 } from './api.js';
 import { buildFrameEvidenceIndex, normalizeVideoSync } from './video-sync.js';
@@ -99,21 +100,42 @@ const showAuth = () => new Promise((resolve) => {
       <input id="claimtraceEmail" name="claimtraceEmail" type="email" autocomplete="username" required />
       <label for="claimtracePassword">Password</label>
       <input id="claimtracePassword" name="claimtracePassword" type="password" autocomplete="current-password" required />
-      <button type="submit">SIGN IN</button>
+      <div id="claimtraceCompanyRow" hidden>
+        <label for="claimtraceCompany">Company name</label>
+        <input id="claimtraceCompany" name="claimtraceCompany" type="text" minlength="2" maxlength="120" autocomplete="organization" />
+        <p class="api-auth-hint">Use at least 12 characters for your password. Your account gets its own private workspace. Free to start.</p>
+      </div>
+      <button type="submit" id="claimtraceSubmit">SIGN IN</button>
+      <button type="button" id="claimtraceToggle" class="api-auth-toggle">New here? Create a free account</button>
       <div id="claimtraceLoginError" class="api-auth-error" aria-live="polite"></div>
     </form>
   `;
   document.body.appendChild(overlay);
   overlay.querySelector('input').focus();
+  let creating = false;
+  const companyRow = overlay.querySelector('#claimtraceCompanyRow');
+  const submitBtn = overlay.querySelector('#claimtraceSubmit');
+  const toggleBtn = overlay.querySelector('#claimtraceToggle');
+  toggleBtn.addEventListener('click', () => {
+    creating = !creating;
+    companyRow.hidden = !creating;
+    overlay.querySelector('#claimtraceCompany').required = creating;
+    overlay.querySelector('#claimtracePassword').autocomplete = creating ? 'new-password' : 'current-password';
+    submitBtn.textContent = creating ? 'CREATE ACCOUNT' : 'SIGN IN';
+    toggleBtn.textContent = creating ? 'Have an account? Sign in' : 'New here? Create a free account';
+    overlay.querySelector('#claimtraceLoginError').textContent = '';
+  });
   overlay.querySelector('form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const error = overlay.querySelector('#claimtraceLoginError');
-    const button = overlay.querySelector('button');
+    const button = submitBtn;
     button.disabled = true;
-    error.textContent = 'AUTHENTICATING…';
+    error.textContent = creating ? 'CREATING ACCOUNT…' : 'AUTHENTICATING…';
     try {
-      const result = await login(form.get('claimtraceEmail'), form.get('claimtracePassword'));
+      const result = creating
+        ? await register(form.get('claimtraceEmail'), form.get('claimtracePassword'), form.get('claimtraceCompany'))
+        : await login(form.get('claimtraceEmail'), form.get('claimtracePassword'));
       overlay.remove();
       resolve(result.user);
     } catch (loginError) {
