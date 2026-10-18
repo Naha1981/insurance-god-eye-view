@@ -185,6 +185,28 @@ const speedCheckHtml = (points) => {
   return `<div class="speed-check"><div class="section-kicker">REPORTED SPEED VS MOVEMENT</div><p class="small-note">${n ? `${n} of ${rows.length} readings disagree with how far the vehicle actually moved.` : 'Reported speeds match the movement.'}</p>${rows.map((r) => `<div class="claim-row ${r.disputed ? 'conflicting' : ''}"><strong>${r.vehicle}</strong> at ${r.at}: reported ${r.reported.toFixed(0)} km/h, moved at ${r.derived.toFixed(0)} km/h ${r.disputed ? '<span class="dispute-badge">Disputed</span>' : ''}</div>`).join('')}</div>`;
 };
 
+
+const installMapSnapshot = (caseId) => {
+  if (document.querySelector('#mapSnapshotBlock')) { document.querySelector('#mapSnapshotBlock').dataset.caseId = caseId; return; }
+  const anchor = document.querySelector('#telemetryWorkspace') || document.querySelector('.reconstruction-input-card');
+  if (!anchor || typeof window.claimtraceCaptureMap !== 'function') return;
+  const block = document.createElement('div');
+  block.id = 'mapSnapshotBlock'; block.className = 'panel-block'; block.dataset.caseId = caseId;
+  block.innerHTML = `<div class="section-kicker">MAP SNAPSHOT FOR THE REPORT</div><p class="small-note"><strong>Purpose:</strong> show where the sample vehicles moved. <strong>Look at:</strong> the two trajectories and where they meet. <strong>Then:</strong> add the view to the evidence so it is sealed (SHA-256) and appears in the exported report with its source and limits.</p><button id="mapSnapshotButton" class="ghost-btn" type="button">ADD MAP SNAPSHOT TO EVIDENCE</button><div id="mapSnapshotStatus" class="small-note" aria-live="polite">Limits: the 3D view is a reconstruction from the telemetry on file, not recorded footage.</div>`;
+  anchor.parentElement.insertBefore(block, anchor);
+  const btn = block.querySelector('#mapSnapshotButton'); const status = block.querySelector('#mapSnapshotStatus');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; status.textContent = 'Capturing map...';
+    try {
+      const blob = await window.claimtraceCaptureMap();
+      const file = new File([blob], `map-snapshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, { type: 'image/png' });
+      const record = await uploadEvidence(block.dataset.caseId, { file, type: 'OTHER', source: 'MAP_SNAPSHOT_RECONSTRUCTION', capturedAt: new Date().toISOString() });
+      renderApiEvidence(await listEvidence(block.dataset.caseId));
+      status.textContent = `SEALED ${record.id} · SHA-256 ${record.sha256.slice(0, 16)}… · in the evidence register and the exported report. Reconstruction view, not recorded footage.`;
+    } catch (error) { status.textContent = `Not added: ${error.message}`; } finally { btn.disabled = false; }
+  });
+};
+
 const renderTelemetryPanel = (points) => {
   const panel = document.querySelector('#telemetryPanel');
   if (!panel) return null;
@@ -571,6 +593,7 @@ const enableApiMode = async () => {
     if (registerNote) registerNote.textContent = 'Connected evidence intake: original bytes are retained by the ClaimTrace API and server-side SHA-256 is recorded at ingestion. Capture time is only asserted when supplied by source metadata or investigator input.';
     installApiIntake(selectedCase.id);
     installReportAction(selectedCase.id);
+    installMapSnapshot(selectedCase.id);
     const records = await listEvidence(selectedCase.id);
     renderApiEvidence(records);
 

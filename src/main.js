@@ -241,6 +241,12 @@ const renderLiveTelemetry = ({ points = [], segments = [] } = {}) => {
   return true;
 };
 
+window.claimtraceCaptureMap = () => new Promise((resolve, reject) => {
+  const cesium = initViewer();
+  if (!cesium) { reject(new Error('Map is not available on this device')); return; }
+  cesium.scene.render();
+  cesium.scene.canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Map snapshot failed'))), 'image/png');
+});
 window.claimtraceRenderTelemetry = renderLiveTelemetry;
 window.claimtraceClearTelemetry = clearLiveTelemetry;
 window.claimtraceSetSyntheticVisibility = setSyntheticSceneVisibility;
