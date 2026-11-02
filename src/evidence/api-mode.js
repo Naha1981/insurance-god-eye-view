@@ -1,3 +1,4 @@
+import { isSampleCase } from './sample-case.js';
 import {
   clearStoredToken,
   createCase,
@@ -82,11 +83,12 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
 
 const setBanner = (text) => {
   const topbar = document.querySelector('.topbar');
-  if (!topbar || document.querySelector('.api-mode-banner')) return;
-  const banner = document.createElement('div');
+  if (!topbar) return;
+  const existing = document.querySelector('.api-mode-banner');
+  const banner = existing || document.createElement('div');
   banner.className = 'api-mode-banner';
   banner.innerHTML = `${esc(text)} <span class="api-live-chip">API CONNECTED</span>`;
-  topbar.insertAdjacentElement('afterend', banner);
+  if (!existing) topbar.insertAdjacentElement('afterend', banner);
 };
 
 const showAuth = () => new Promise((resolve) => {
@@ -538,7 +540,7 @@ const mountCaseSwitcher = async (refreshCase) => {
     } else {
       list.innerHTML = cases.map((item) => `
         <button class="case-row" type="button" data-case-id="${esc(item.id)}">
-          <span><strong>${esc(item.title)}</strong><small>${esc(item.id)} · ${esc(item.status)}</small></span>
+          <span><strong>${isSampleCase(item) ? "SAMPLE ONLY - fictional data · " : ""}${esc(item.title)}</strong><small>${esc(item.id)} · ${esc(item.status)}</small></span>
           <span class="case-count">${item.evidence_count} evidence</span>
         </button>
       `).join('');
@@ -575,6 +577,7 @@ const mountCaseSwitcher = async (refreshCase) => {
   overlay.querySelector('#closeCaseButton').addEventListener('click', () => overlay.remove());
 };
 
+
 const enableApiMode = async () => {
   if (!isApiConfigured()) return;
   await waitForWorkspace();
@@ -600,16 +603,17 @@ const enableApiMode = async () => {
     sessionStorage.setItem(CASE_KEY, caseRecord.id);
   }
   if (!caseRecord) {
-    caseRecord = await createCase({ title: 'ClaimTrace investigation — Johannesburg motor collision', incident_at: new Date('2026-08-18T12:31:50Z').toISOString(), location: { lat: -26.2466, lon: 28.0205 } });
+    caseRecord = await createCase({ title: 'SAMPLE ONLY - fictional Johannesburg motor collision (not customer evidence)', incident_at: new Date('2026-08-18T12:31:50Z').toISOString(), location: { lat: -26.2466, lon: 28.0205 } });
     sessionStorage.setItem(CASE_KEY, caseRecord.id);
   }
 
   const refreshCase = async (selectedCase) => {
-    setBanner(`${user.email} · ${user.tenant_id} · ${selectedCase.id}`);
+    const sampleLabel = isSampleCase(selectedCase);
+    setBanner(`${sampleLabel ? 'SAMPLE ONLY - fictional data, not customer evidence · ' : ''}${user.email} · ${user.tenant_id} · ${selectedCase.id}`);
     const casePill = document.querySelector('.case-pill');
     if (casePill) casePill.textContent = selectedCase.id;
     const title = document.querySelector('.topbar h1');
-    if (title) title.textContent = selectedCase.title;
+    if (title) title.textContent = `${sampleLabel ? "SAMPLE ONLY - " : ""}${selectedCase.title}`;
     const footerBadge = document.querySelector('.footer-badge');
     if (footerBadge) footerBadge.textContent = 'API PILOT';
     const registerNote = document.querySelector('#evidenceRegister')?.parentElement?.querySelector('.small-note');

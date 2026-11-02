@@ -1,3 +1,4 @@
+import { isSampleCase } from '../src/evidence/sample-case.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildCaseAssessment, buildTrajectoryAssessment, findMissingEvidence, normalizeEvidence, provenanceScore } from '../src/evidence/engine.js';
@@ -93,3 +94,9 @@ const helloHash = await hashBytes(new TextEncoder().encode('hello'));
 assert.equal(helloHash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
 
 console.log('ClaimTrace unit tests: PASS');
+
+assert.equal(isSampleCase({title:'ClaimTrace investigation — Johannesburg motor collision',incident_at:'2026-08-18T12:31:50+00:00'}),true);
+assert.equal(isSampleCase({title:'SAMPLE ONLY - fictional collision'}),true);
+assert.equal(isSampleCase({title:'Customer collision',incident_at:'2026-08-18T12:31:50Z'}),false);
+assert.equal(isSampleCase({title:'ClaimTrace investigation — Johannesburg motor collision',incident_at:'2026-08-19T12:31:50Z'}),false);
+console.log('Sample labelling regression: legacy ISO variants, explicit sample, real case negatives PASS');
