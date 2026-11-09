@@ -1,6 +1,8 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './styles.css';
+import './workflow-shell.css';
+import './workflow-shell-overrides.css';
 import { createEvidenceRecord, hashBytes, validateEvidenceRecord } from './evidence/intake.js';
 
 const INCIDENT = {

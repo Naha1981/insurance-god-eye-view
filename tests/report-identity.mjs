@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {syncReportIdentity} from '../src/evidence/report-identity.js';
+const h3={textContent:'Old demo'},p={textContent:'CLM-DEMO-0001'};
+const root={querySelector:()=>({querySelector:s=>s==='h3'?h3:p})};
+syncReportIdentity(root,{id:'case-real-123',title:'Own current case'},false);
+assert.equal(h3.textContent,'Own current case');assert.equal(p.textContent,'case-real-123 · Investigator evidence reconstruction');
+syncReportIdentity(root,{id:'sample-456',title:'Fictional synthetic case'},true);
+assert.equal(h3.textContent,'SAMPLE ONLY - Fictional synthetic case');assert.match(p.textContent,/sample-456/);
+syncReportIdentity(root,{id:'sample-789',title:'SAMPLE ONLY - Fictional'},true);assert.equal(h3.textContent,'SAMPLE ONLY - Fictional');
+syncReportIdentity({querySelector:()=>null},{id:'abc'},false);
+console.log('PASS report selected-case identity, sample label, case switch, absent cover');

@@ -1,3 +1,4 @@
+import { syncReportIdentity } from './report-identity.js';
 import { isSampleCase } from './sample-case.js';
 import {
   clearStoredToken,
@@ -614,6 +615,7 @@ const enableApiMode = async () => {
     if (casePill) casePill.textContent = selectedCase.id;
     const title = document.querySelector('.topbar h1');
     if (title) title.textContent = `${sampleLabel ? "SAMPLE ONLY - " : ""}${selectedCase.title}`;
+    syncReportIdentity(document, selectedCase, sampleLabel);
     const footerBadge = document.querySelector('.footer-badge');
     if (footerBadge) footerBadge.textContent = 'API PILOT';
     const registerNote = document.querySelector('#evidenceRegister')?.parentElement?.querySelector('.small-note');
