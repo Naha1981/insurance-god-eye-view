@@ -1,3 +1,4 @@
+import { fetchWithDeadline } from './request-deadline.js';
 const API_BASE = String(import.meta.env.VITE_CLAIMTRACE_API_BASE ?? '').replace(/\/$/, '');
 const TOKEN_KEY = 'claimtrace_access_token';
 
@@ -12,7 +13,7 @@ const request = async (path, options = {}) => {
   const headers = { Accept: 'application/json', ...(options.headers ?? {}) };
   const token = getStoredToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const response = await fetchWithDeadline(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
     let detail = `API request failed (${response.status})`;
     try { const d = (await response.json()).detail; detail = Array.isArray(d) ? d.map((x) => (x.msg ?? '').replace(/^Value error, /, '')).join('. ') || detail : (d ?? detail); } catch { /* preserve HTTP status */ }

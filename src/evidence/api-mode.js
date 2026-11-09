@@ -28,9 +28,10 @@ let videoArtifactUrl = null;
 
 const style = document.createElement('style');
 style.textContent = `
-  .api-mode-banner { margin: 12px 18px 0; padding: 10px 12px; border: 1px solid rgba(74,180,255,.25); background: rgba(15,35,52,.72); color: #b9dfff; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
-  .api-auth { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(3,9,15,.86); backdrop-filter: blur(8px); }
-  .api-auth-card, .case-switcher-card { width: min(560px, 100%); padding: 28px; border: 1px solid #27415a; background: #0c1824; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+  .api-mode-banner { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin: 12px 18px 0; padding: 10px 12px; border: 1px solid rgba(74,180,255,.25); background: rgba(15,35,52,.72); color: #b9dfff; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+  .api-mode-banner button { min-height:44px; padding:10px 14px; border:1px solid #4ab4ff; border-radius:5px; background:#102b3d; color:#edf4fa; font:600 13px system-ui; cursor:pointer; }
+  .api-auth { overflow-y:auto; box-sizing:border-box; position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(3,9,15,.86); backdrop-filter: blur(8px); }
+  .api-auth-card, .case-switcher-card { box-sizing:border-box; max-height:calc(100dvh - 48px); overflow-y:auto; width: min(560px, 100%); padding: 28px; border: 1px solid #27415a; background: #0c1824; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
   .api-auth-card h2, .case-switcher-card h2 { margin: 0 0 8px; color: #fff; }
   .api-auth-card p, .case-switcher-card p { margin: 0 0 18px; color: #92a8bd; font-size: 13px; line-height: 1.5; }
   .api-auth-card label, .case-switcher-card label { display: block; margin: 12px 0 6px; color: #9db4ca; font: 11px ui-monospace, monospace; text-transform: uppercase; }
@@ -108,13 +109,16 @@ const showAuth = () => new Promise((resolve) => {
         <input id="claimtraceCompany" name="claimtraceCompany" type="text" minlength="2" maxlength="120" autocomplete="organization" />
         <p class="api-auth-hint">Use at least 12 characters for your password. Your account gets its own private workspace. Free to start.</p>
       </div>
+      <button type="button" id="claimtraceGuest">Try Demo Case - no account needed</button>
+      <p>Guest preview is read-only and synthetic. No private cases, uploads or saved investigations.</p>
       <button type="submit" id="claimtraceSubmit">SIGN IN</button>
       <button type="button" id="claimtraceToggle" class="api-auth-toggle">New here? Create a free account</button>
       <div id="claimtraceLoginError" class="api-auth-error" aria-live="polite"></div>
     </form>
   `;
   document.body.appendChild(overlay);
-  overlay.querySelector('input').focus();
+  overlay.querySelector('#claimtraceGuest').focus();
+  overlay.querySelector('#claimtraceGuest').addEventListener('click', () => { overlay.remove(); resolve({ guest: true }); });
   let creating = false;
   const companyRow = overlay.querySelector('#claimtraceCompanyRow');
   const submitBtn = overlay.querySelector('#claimtraceSubmit');
@@ -134,6 +138,9 @@ const showAuth = () => new Promise((resolve) => {
     const error = overlay.querySelector('#claimtraceLoginError');
     const button = submitBtn;
     button.disabled = true;
+    toggleBtn.disabled = true;
+    overlay.querySelector('#claimtraceGuest').disabled = true;
+    const waiting = setTimeout(() => { error.textContent = 'Still waiting for the service. This request stops after 20 seconds; nothing is retried automatically.'; }, 6000);
     error.textContent = creating ? 'CREATING ACCOUNT…' : 'AUTHENTICATING…';
     try {
       const result = creating
@@ -144,6 +151,10 @@ const showAuth = () => new Promise((resolve) => {
     } catch (loginError) {
       error.textContent = loginError instanceof Error ? loginError.message : 'Authentication failed';
       button.disabled = false;
+    } finally {
+      clearTimeout(waiting);
+      toggleBtn.disabled = false;
+      overlay.querySelector('#claimtraceGuest').disabled = false;
     }
   });
 });
@@ -579,9 +590,32 @@ const mountCaseSwitcher = async (refreshCase) => {
 };
 
 
+const installGuestPreview = () => {
+  sessionStorage.setItem('claimtrace_guest_preview', '1');
+  const banner = document.createElement('div');
+  banner.className = 'api-mode-banner';
+  banner.setAttribute('role', 'status');
+  banner.textContent = 'GUEST PREVIEW - SYNTHETIC SAMPLE ONLY. Read-only. No private cases or server writes. ';
+  const signIn = document.createElement('button');
+  signIn.textContent = 'Sign in for your own case';
+  signIn.type = 'button';
+  signIn.addEventListener('click', () => { sessionStorage.removeItem('claimtrace_guest_preview'); location.reload(); });
+  banner.append(signIn);
+  document.querySelector('.topbar')?.insertAdjacentElement('afterend', banner);
+  for (const id of ['addVideoEvidence','addTelemetryEvidence','addDocumentEvidence','addEvidence','evidenceFile','demoVideoClock','evidenceType','reportStageButton','reportStageButtonSecondary']) {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = true; el.title = 'Read-only guest preview. Sign in to upload evidence or export your own case.'; }
+  }
+  const note = document.getElementById('intakeStatus');
+  if (note) note.textContent = 'Read-only sample: no source evidence has been uploaded. Sign in to create a private case. Nothing here is customer evidence.';
+  const badge = document.querySelector('.footer-badge');
+  if (badge) badge.textContent = 'GUEST SAMPLE';
+};
+
 const enableApiMode = async () => {
   if (!isApiConfigured()) return;
   await waitForWorkspace();
+  if (sessionStorage.getItem('claimtrace_guest_preview') === '1') { installGuestPreview(); return; }
   let user;
   if (getStoredToken()) {
     try {
@@ -592,6 +626,7 @@ const enableApiMode = async () => {
     }
   }
   if (!user) user = await showAuth();
+  if (user.guest) { installGuestPreview(); return; }
 
   const cases = await listCases();
   let caseRecord = null;
