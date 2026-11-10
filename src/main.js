@@ -307,7 +307,24 @@ const evidenceFileInput=document.querySelector('#evidenceFile');
 const evidenceType=document.querySelector('#evidenceType');
 const intakeStatus=document.querySelector('#intakeStatus');
 addEvidenceButton?.addEventListener('click',()=>evidenceFileInput?.click());
-document.querySelectorAll('.upload-tile').forEach((tile)=>tile.addEventListener('click',()=>{ const mapping={addVideoEvidence:'DASHCAM',addTelemetryEvidence:'TELEMATICS',addDocumentEvidence:'OTHER'}; evidenceType.value=mapping[tile.id]||'OTHER'; evidenceFileInput.click(); }));
+document.querySelectorAll('.upload-tile').forEach((tile) => tile.addEventListener('click', () => {
+  const mapping = { addVideoEvidence: 'DASHCAM', addTelemetryEvidence: 'TELEMATICS', addDocumentEvidence: 'OTHER' };
+  const apiType = document.querySelector('#apiEvidenceType');
+  if (apiType) {
+    // API workspaces must never fall back to the browser-only demo register.
+    if (tile.id === 'addTelemetryEvidence') {
+      document.querySelector('.workflow-step[data-stage="reconstruction"]')?.click();
+      document.querySelector('#telemetryImportFile')?.click();
+    } else {
+      apiType.value = mapping[tile.id] || 'OTHER';
+      apiType.dispatchEvent(new Event('change'));
+      document.querySelector('#apiEvidenceFile')?.click();
+    }
+    return;
+  }
+  evidenceType.value = mapping[tile.id] || 'OTHER';
+  evidenceFileInput.click();
+}));
 evidenceFileInput?.addEventListener('change',async()=>{
   const [file]=evidenceFileInput.files??[]; if(!file)return; addEvidenceButton.disabled=true; intakeStatus.textContent=`HASHING ${file.name}…`;
   try {

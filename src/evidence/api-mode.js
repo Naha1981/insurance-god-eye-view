@@ -181,6 +181,12 @@ const renderApiEvidence = (records) => {
   if (!register || !countChip || !timeline) return;
 
   countChip.textContent = `${records.length} ITEMS`;
+  const readinessEvidence = document.querySelector('#readinessEvidence');
+  const readinessTimeline = document.querySelector('#readinessTimeline');
+  if (readinessEvidence) readinessEvidence.textContent = records.length
+    ? `${records.length} source item${records.length === 1 ? '' : 's'} registered` : 'Awaiting evidence';
+  if (readinessTimeline) readinessTimeline.textContent = records.length
+    ? `${records.length} evidence-linked event${records.length === 1 ? '' : 's'}` : 'Awaiting evidence events';
   register.classList.toggle('empty-register', records.length === 0);
   const intakeStatus = document.querySelector('#intakeStatus');
   if (intakeStatus) intakeStatus.textContent = records.length
@@ -265,6 +271,9 @@ const installMapSnapshot = (caseId) => {
 };
 
 const renderTelemetryPanel = (points) => {
+  const readiness = document.querySelector('#readinessReconstruction');
+  if (readiness) readiness.textContent = points.length
+    ? `${points.length} persisted telemetry points; investigator review required` : 'Awaiting source-backed movement data';
   const panel = document.querySelector('#telemetryPanel');
   if (!panel) return null;
   const raw = points.map((point) => ({
