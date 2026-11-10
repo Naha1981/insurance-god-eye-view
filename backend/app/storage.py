@@ -180,3 +180,8 @@ def list_audit_events(tenant_id: str, resource_id: str | None = None) -> list[di
     if resource_id is not None: statement = statement.where(audit_events.c.resource_id == resource_id)
     with connect() as connection: rows = connection.execute(statement).mappings().all()
     return [{**{key: value for key, value in row.items() if key != "metadata_json"}, "metadata": json.loads(row["metadata_json"]) if row["metadata_json"] else None} for row in rows]
+
+
+def delete_session_by_hash(token_hash: str) -> None:
+    with engine().begin() as connection:
+        connection.execute(sessions.delete().where(sessions.c.token_hash == token_hash))

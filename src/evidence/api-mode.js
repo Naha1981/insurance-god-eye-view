@@ -17,6 +17,7 @@ import {
   listTelemetry,
   listTelemetryProvenance,
   login,
+  logout,
   register,
   uploadEvidence,
 } from './api.js';
@@ -73,6 +74,15 @@ style.textContent = `
   .video-frame-btn { width: 100%; margin-top: 9px; padding: 9px 11px; border: 1px solid #27415a; background: #17324a; color: #fff; cursor: pointer; font-weight: 700; }
   .video-frame-btn:disabled { opacity: .55; cursor: not-allowed; }
   .video-capture-start { margin-top: 8px; color: #8aa4b9; font-size: 11px; line-height: 1.4; }
+  /* Auth-only readability. Do not restyle the investigation shell. */
+  .api-auth-card h2 { font-size:22px; line-height:1.25; }
+  .api-auth-card p { color:#b7c9d9; font-size:15px; line-height:1.5; }
+  .api-auth-card label { color:#c4d3e0; font:600 14px/1.4 system-ui,sans-serif; text-transform:none; }
+  .api-auth-card input { font-size:16px; min-height:48px; border-color:#7792aa; }
+  .api-auth-card button { min-height:48px; font-size:16px; }
+  .api-auth-card .api-auth-hint { opacity:1; font-size:14px; }
+  .api-auth-card .api-auth-toggle { background:transparent; color:#b8dfff; border:1px solid #7792aa; }
+  .api-auth-card .api-auth-error { color:#ffb4a5; font-size:14px; }
 `;
 document.head.appendChild(style);
 
@@ -117,6 +127,11 @@ const showAuth = () => new Promise((resolve) => {
     </form>
   `;
   document.body.appendChild(overlay);
+  const signoutNotice = sessionStorage.getItem('claimtrace_signout_notice');
+  if (signoutNotice) {
+    overlay.querySelector('#claimtraceLoginError').textContent = signoutNotice;
+    sessionStorage.removeItem('claimtrace_signout_notice');
+  }
   overlay.querySelector('#claimtraceGuest').focus();
   overlay.querySelector('#claimtraceGuest').addEventListener('click', () => { overlay.remove(); resolve({ guest: true }); });
   let creating = false;
@@ -166,6 +181,11 @@ const renderApiEvidence = (records) => {
   if (!register || !countChip || !timeline) return;
 
   countChip.textContent = `${records.length} ITEMS`;
+  register.classList.toggle('empty-register', records.length === 0);
+  const intakeStatus = document.querySelector('#intakeStatus');
+  if (intakeStatus) intakeStatus.textContent = records.length
+    ? `${records.length} original source ${records.length === 1 ? 'record' : 'records'} registered. Server hashes and custody references are shown below.`
+    : 'No source evidence has been registered yet.';
   register.innerHTML = records.map((record) => `
     <div class="evidence-row">
       <div class="evidence-main"><span class="evidence-id">${esc(record.id)}</span><strong>${esc(record.type)}</strong><span class="evidence-title">${esc(record.source_ref || record.source || 'Evidence')}</span></div>
@@ -444,6 +464,8 @@ const installApiIntake = (caseId) => {
   oldButton.hidden = true;
   oldInput.hidden = true;
   oldType.hidden = true;
+  const demoClockLabel = document.querySelector('#demoVideoClock')?.closest('label');
+  if (demoClockLabel) { demoClockLabel.hidden = true; demoClockLabel.style.setProperty('display', 'none', 'important'); }
   oldType.insertAdjacentHTML('afterend', `
     <select id="apiEvidenceType" class="intake-select" aria-label="API evidence type">
       <option>DASHCAM</option>
@@ -649,7 +671,16 @@ const enableApiMode = async () => {
     const casePill = document.querySelector('.case-pill');
     if (casePill) casePill.textContent = selectedCase.id;
     const title = document.querySelector('.topbar h1');
-    if (title) title.textContent = `${sampleLabel ? "SAMPLE ONLY - " : ""}${selectedCase.title}`;
+    if (title) title.textContent = `${sampleLabel && !/^SAMPLE\b/i.test(selectedCase.title) ? "SAMPLE ONLY - " : ""}${selectedCase.title}`;
+    const incidentTime = selectedCase.incident_at
+      ? new Date(selectedCase.incident_at).toISOString() : 'Incident time not supplied';
+    const sourceLocation = selectedCase.location;
+    const locationText = sourceLocation && Number.isFinite(sourceLocation.lat) && Number.isFinite(sourceLocation.lon)
+      ? `${sourceLocation.lat}, ${sourceLocation.lon}` : 'Location not supplied';
+    document.querySelectorAll('.case-location').forEach((el) => { el.textContent = `${incidentTime} · ${locationText}`; });
+    const mapContext = document.querySelector('.map-hud .hud-sub');
+    if (mapContext) mapContext.textContent = locationText;
+
     syncReportIdentity(document, selectedCase, sampleLabel);
     const footerBadge = document.querySelector('.footer-badge');
     if (footerBadge) footerBadge.textContent = 'API PILOT';
@@ -696,6 +727,26 @@ const enableApiMode = async () => {
     button.title = 'Switch investigation case';
     button.addEventListener('click', () => mountCaseSwitcher(refreshCase));
     actions.insertBefore(button, actions.firstChild);
+    document.querySelector('#claimtraceSignOut')?.remove();
+    const signOut = document.createElement('button');
+    signOut.id = 'claimtraceSignOut';
+    signOut.className = 'ghost-btn api-case-btn';
+    signOut.textContent = 'SIGN OUT';
+    signOut.addEventListener('click', async () => {
+      signOut.disabled = true;
+      try {
+        await logout();
+      } catch (error) {
+        sessionStorage.setItem('claimtrace_signout_notice', 'Signed out on this device. The service could not confirm session revocation. Sign in again when it is available.');
+      } finally {
+        clearStoredToken();
+        sessionStorage.removeItem(CASE_KEY);
+        sessionStorage.removeItem('claimtrace_guest_preview');
+        window.location.reload();
+      }
+    });
+    actions.appendChild(signOut);
+
   }
 };
 

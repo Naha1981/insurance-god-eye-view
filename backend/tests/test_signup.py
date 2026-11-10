@@ -39,3 +39,18 @@ def test_signup_validation(client):
     ok = {"email": "c@x.co.za", "password": "correct-horse-3", "company_name": "C Co"}
     assert client.post("/v1/auth/register", json=ok).status_code == 200
     assert client.post("/v1/auth/register", json=ok).status_code == 409
+
+
+def test_logout_revokes_only_current_session(client):
+    payload = {"email":"logout@qa.invalid", "password":"test-logout-fixture-0626", "company_name":"Synthetic Logout"}
+    registered = client.post("/v1/auth/register", json=payload)
+    assert registered.status_code == 200
+    first = {"Authorization":"Bearer " + registered.json()["access_token"]}
+    second = {"Authorization":"Bearer " + client.post("/v1/auth/login", json=payload).json()["access_token"]}
+    assert client.post("/v1/auth/logout", headers=first).status_code == 204
+    assert client.get("/v1/auth/me", headers=first).status_code == 401
+    assert client.get("/v1/auth/me", headers=second).status_code == 200
+
+
+def test_logout_requires_session(client):
+    assert client.post("/v1/auth/logout").status_code == 401

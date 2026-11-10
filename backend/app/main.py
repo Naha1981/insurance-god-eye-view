@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Header, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -240,6 +240,15 @@ def register(payload: auth.RegisterRequest, request: Request) -> LoginResponse:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     audit(principal, "AUTH_REGISTER", "USER", principal.user_id)
     return LoginResponse(access_token=token, expires_in_hours=auth.SESSION_HOURS, user=principal)
+
+
+@app.post("/v1/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(principal: auth.Principal = Depends(auth.get_current_principal), authorization: str | None = Header(default=None)) -> Response:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer authentication required")
+    audit(principal, "AUTH_LOGOUT", "USER", principal.user_id)
+    storage.delete_session_by_hash(auth._hash_token(authorization[7:].strip()))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.get("/v1/auth/me", response_model=auth.Principal)

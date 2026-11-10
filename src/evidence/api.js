@@ -30,6 +30,10 @@ export const register = async (email, password, company_name) => {
   const body = await request('/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, company_name }) });
   setStoredToken(body.access_token); return body;
 };
+export const logout = async () => {
+  try { await request('/v1/auth/logout', { method: 'POST' }); }
+  finally { clearStoredToken(); }
+};
 export const getMe = () => request('/v1/auth/me');
 export const listCases = () => request('/v1/cases');
 export const createCase = (payload) => request('/v1/cases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
