@@ -623,6 +623,7 @@ const mountCaseSwitcher = async (refreshCase) => {
 
 const installGuestPreview = () => {
   sessionStorage.setItem('claimtrace_guest_preview', '1');
+  window.claimtraceLoadGuestSample?.();
   const banner = document.createElement('div');
   banner.className = 'api-mode-banner';
   banner.setAttribute('role', 'status');
@@ -638,7 +639,7 @@ const installGuestPreview = () => {
     if (el) { el.disabled = true; el.title = 'Read-only guest preview. Sign in to upload evidence or export your own case.'; }
   }
   const note = document.getElementById('intakeStatus');
-  if (note) note.textContent = 'Read-only sample: no source evidence has been uploaded. Sign in to create a private case. Nothing here is customer evidence.';
+  if (note) note.textContent = 'Read-only synthetic fixture: four invented source records and sample findings. No original customer evidence is present. Sign in to create a private case.';
   const badge = document.querySelector('.footer-badge');
   if (badge) badge.textContent = 'GUEST SAMPLE';
 };

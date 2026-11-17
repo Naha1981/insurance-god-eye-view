@@ -189,3 +189,8 @@
   .reconstruction-card { height: 500px; }
   .reconstruction-card, .reconstruction-card .map { min-height: 500px; }
 }
+
+/* Native hidden must win over the empty-state grid display. */
+.reconstruction-empty[hidden], .reconstruction-input-empty[hidden] { display:none!important; }
+
+#reconstructionInputEmpty[hidden] { display:none!important; }

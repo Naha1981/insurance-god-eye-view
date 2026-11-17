@@ -167,7 +167,7 @@ const clearLiveTelemetry = () => {
 };
 
 const addSyntheticEntity = (entity) => { if (entity) syntheticSceneEntities.push(entity); return entity; };
-const addTrajectory = (id, points, color) => addSyntheticEntity(viewer.entities.add({ id, polyline: { positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)), width: 5, material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.15, color: Cesium.Color.fromCssColorString(color) }), clampToGround: false } }));
+const addTrajectory = (id, points, color) => addSyntheticEntity(viewer.entities.add({ id, polyline: { positions: points.map(([lon, lat]) => toCartesian(lon, lat, 10)), width: 5, material: Cesium.Color.fromCssColorString(color), clampToGround: false } }));
 
 const initViewer = () => {
   if (viewerInitialized) return viewer;
@@ -254,6 +254,7 @@ window.claimtraceCaptureMap = () => new Promise((resolve, reject) => {
 window.claimtraceShowSample = () => {
   window.claimtraceSampleMode = true;
   if (reconstructionEmpty) reconstructionEmpty.hidden = true;
+  if (reconstructionInputEmpty) reconstructionInputEmpty.hidden = true;
   renderDemoScene();
   if (mapStatus) { mapStatus.hidden = false; mapStatus.textContent = 'SAMPLE RECONSTRUCTION · made-up vehicles, not case data'; }
 };
@@ -269,7 +270,7 @@ const setScreen = (stageId) => {
   document.querySelectorAll('[data-stage]').forEach((control)=>control.classList.toggle('active', control.dataset.stage===target));
   document.querySelector('.screen-stack')?.setAttribute('data-active-screen', target);
   if (target === 'reconstruction') {
-    requestAnimationFrame(() => { const cesium = initViewer(); cesium?.resize(); if (window.claimtraceApiMode) { updateReconstructionState(document.querySelectorAll('.evidence-row').length > 0, false); } else { setSyntheticSceneVisibility(false); } });
+    requestAnimationFrame(() => { const cesium = initViewer(); cesium?.resize(); if (window.claimtraceApiMode) { updateReconstructionState(document.querySelectorAll('.evidence-row').length > 0, false); } else if (window.claimtraceSampleMode) { renderDemoScene(); } else { setSyntheticSceneVisibility(false); } });
   }
 };
 
@@ -300,6 +301,20 @@ const updateReadiness = () => {
   if (r) r.textContent='Awaiting source-backed movement data';
 };
 
+window.claimtraceLoadGuestSample = () => {
+  if (EVIDENCE.length) return;
+  const rows = [
+    ['SAMPLE-TEL-A','TELEMATICS','14:31:44','Vehicle A synthetic track','Four invented coordinates approaching the sample intersection.'],
+    ['SAMPLE-TEL-B','TELEMATICS','14:31:46','Vehicle B synthetic track','Four invented coordinates approaching from the other direction.'],
+    ['SAMPLE-NOTE','DOCUMENT','14:31:50','Sample incident note','Fictional collision scenario. Not a witness statement or recorded footage.'],
+    ['SAMPLE-REVIEW','REVIEW','14:31:52','Sample investigator review','Illustrates source-linked reasoning only. Liability, speed and cause are not established.']
+  ];
+  rows.forEach(([id,type,time,title,detail]) => EVIDENCE.push({id,type,time,title,detail,source:'SYNTHETIC FIXTURE',confidence:'SAMPLE',provenance:'SYNTHETIC'}));
+  renderEvidenceRegister(); renderTimeline(); updateReadiness();
+  document.querySelector('#claims').innerHTML = '<div class="evidence-row"><strong>SAMPLE OBSERVATION: Two invented trajectories meet near the example intersection.</strong><p>Source: SAMPLE-TEL-A and SAMPLE-TEL-B. Demonstration geometry only, not a verified collision or speed finding.</p></div><div class="evidence-row"><strong>UNRESOLVED: Cause, liability and actual vehicle speed.</strong><p>No authentic telemetry, footage, witness statement or expert review is supplied by this guest sample.</p></div>';
+  document.querySelector('#readinessReconstruction').textContent='Synthetic two-vehicle reconstruction available';
+  window.claimtraceShowSample();
+};
 renderTimeline(); renderClaims(); renderEvidenceRegister(); updateReadiness(); setScreen('evidence');
 
 const addEvidenceButton=document.querySelector('#addEvidence');
